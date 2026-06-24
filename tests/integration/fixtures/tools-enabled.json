@@ -1,0 +1,5 @@
+{
+  "_placeholder": true,
+  "description": "Single-step flow with tool-use enabled. Expects a tool named 'get_weather' to be provided by the caller. Test fixture for SDK integration tests.",
+  "TODO": "Author this flow via noukai-mcp create_flow + add_block tools, then export to JSON via hydrate_project. See fixtures/README.md."
+}

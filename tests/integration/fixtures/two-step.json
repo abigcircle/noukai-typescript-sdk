@@ -1,0 +1,5 @@
+{
+  "_placeholder": true,
+  "description": "Two-step sequential flow: first block paraphrases the message, second block summarises the paraphrase. Test fixture for SDK integration tests.",
+  "TODO": "Author this flow via noukai-mcp create_flow + add_block tools, then export to JSON via hydrate_project. See fixtures/README.md."
+}
