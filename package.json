@@ -25,7 +25,8 @@
   "files": ["dist", "README.md", "LICENSE", "CHANGELOG.md"],
   "license": "MIT",
   "homepage": "https://noukai.xyz",
-  "repository": { "type": "git", "url": "https://github.com/noukai/noukai-node" },
+  "repository": { "type": "git", "url": "git+https://github.com/abigcircle/noukai-typescript-sdk.git" },
+  "bugs": { "url": "https://github.com/abigcircle/noukai-typescript-sdk/issues" },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
