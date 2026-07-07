@@ -30,7 +30,7 @@ describe("execute URL routing", () => {
     await new Noukai({ apiKey: "nk_x" }).flow("acme/spelling/grade-3").execute({ message: "hi" });
     const url = fetchSpy.mock.calls[0]?.[0] as string;
     // Ensure the origin is followed immediately by /api/v1/seq/... not /seq/...
-    expect(url).toMatch(/^https:\/\/api\.noukai\.xyz\/api\/v1\/seq\//);
+    expect(url).toMatch(/^https:\/\/api\.noukai\.dev\/api\/v1\/seq\//);
   });
 
   it("integer version → /vN/execute URL", async () => {
