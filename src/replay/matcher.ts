@@ -39,6 +39,7 @@ import type { SessionExecution } from "../types/session.js";
 import type { Transport } from "../transport.js";
 import type { ScopeState, ReplayCursor } from "./state.js";
 import { nextIndex } from "./state.js";
+import { stripTraceSidecars } from "./snapshot.js";
 
 // ---------------------------------------------------------------------------
 // Internal: in-flight tracking (Q6 concurrent detection)
@@ -212,7 +213,9 @@ function materializeExecuteResult(
 
   const result: ExecuteResult = {
     status: "completed",
-    result: lastStep?.outputSnapshot,
+    // Strip reserved trace sidecars (e.g. __rendered_prompt__) so the replayed
+    // result matches the live execute() result, which excludes them.
+    result: stripTraceSidecars(lastStep?.outputSnapshot),
     executionId: ex.executionId,
     flowId: ex.flowId ?? "",
     blockCount: ex.steps.length || 1,

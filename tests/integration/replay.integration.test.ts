@@ -463,21 +463,30 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
       // Step-level output fidelity: each replayed step's output payload equals
       // the captured one. step_id parity alone could pass on a refactor that
       // preserved ids while changing payloads — this nails the content too.
-      expect(replayedStepCompleted.map((e) => e.output)).toEqual(
-        capturedStepCompleted.map((e) => e.output),
-      );
+      //
+      // Event-model note (phase-7 SSE-reconstruction design): a LIVE events()
+      // stream carries each step's output on a separate `step_output` event
+      // (`outputContext`), and its terminal `flow_completed` is metadata-only
+      // (no `result`). Replay reconstruction deliberately collapses per-step
+      // output onto `step_completed` (`output`) and surfaces the final output
+      // on `flow_completed.result`. Same data, different carrier events — so
+      // compare the replayed `step_completed` outputs against the captured
+      // `step_output` payloads.
+      const capturedStepOutputs = captured.twoStepEvents
+        .filter((e) => e.type === "step_output")
+        .map((e) => (e as unknown as { outputContext?: unknown }).outputContext);
+      expect(capturedStepOutputs).toHaveLength(2);
+      expect(replayedStepCompleted.map((e) => e.output)).toEqual(capturedStepOutputs);
 
-      // Terminal result fidelity on the events stream's FlowCompleted.
-      const capturedFlowCompleted = captured.twoStepEvents.filter(
-        (e): e is FlowCompleted => e.type === "flow_completed",
-      );
+      // Terminal result fidelity: replay's reconstructed `flow_completed`
+      // carries the final output_snapshot as `result`; assert it matches the
+      // last captured `step_output` payload (the live stream's terminal output).
       const replayedFlowCompleted = replayed.twoStepEvents.filter(
         (e): e is FlowCompleted => e.type === "flow_completed",
       );
-      expect(capturedFlowCompleted.length).toBeGreaterThan(0);
       expect(replayedFlowCompleted.length).toBeGreaterThan(0);
       expect(replayedFlowCompleted.at(-1)?.result).toEqual(
-        capturedFlowCompleted.at(-1)?.result,
+        capturedStepOutputs.at(-1),
       );
     },
     180_000,

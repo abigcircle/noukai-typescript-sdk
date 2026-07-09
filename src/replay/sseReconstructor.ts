@@ -26,6 +26,7 @@ import type {
   FlowCompleted,
 } from "../types/events.js";
 import type { SessionExecution } from "../types/session.js";
+import { stripTraceSidecars } from "./snapshot.js";
 
 /**
  * Reconstruct a stream of `StreamEvent`s from a recorded execution.
@@ -56,10 +57,15 @@ export async function* reconstructEvents(
   yield runStarted;
 
   // 2. Per-step events — ordered by startedAt ASC (trust wire order from BE).
+  //    `stepIndex` is stamped here so the replay path produces the same
+  //    flow-absolute, consumer-frame contract as the live EventIterator
+  //    (see src/types/events.ts for the SDK guarantee).
+  let stepIndex = 0;
   for (const step of ex.steps) {
     const started: StepStarted = {
       type: "step_started",
       stepId: step.stepId,
+      stepIndex,
     };
     yield started;
 
@@ -87,10 +93,14 @@ export async function* reconstructEvents(
     const completed: StepCompleted = {
       type: "step_completed",
       stepId: step.stepId,
-      output: step.outputSnapshot,
+      // Strip reserved trace sidecars so the replayed output matches the live
+      // step_completed output, which excludes them.
+      output: stripTraceSidecars(step.outputSnapshot),
+      stepIndex,
       // step.name / tokens / costUsd are not stored in snapshots — left unset.
     };
     yield completed;
+    stepIndex++;
   }
 
   // 3. Terminal flow_completed (success path).
@@ -98,7 +108,7 @@ export async function* reconstructEvents(
   const terminal: FlowCompleted = {
     type: "flow_completed",
     executionId: ex.executionId,
-    result: lastStep?.outputSnapshot,
+    result: stripTraceSidecars(lastStep?.outputSnapshot),
   };
   yield terminal;
 }

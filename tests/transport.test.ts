@@ -17,7 +17,7 @@ function makeTransport(
 ) {
   return new Transport({
     apiKey: "nk_test",
-    baseUrl: "https://noukai.xyz/api/v1",
+    baseUrl: "https://noukai.dev/api/v1",
     timeout: 30_000,
     maxRetries: 1,
     logPayloads: false,
@@ -285,15 +285,15 @@ describe("close", () => {
 describe("URL resolution", () => {
   it("prepends path with base URL", async () => {
     fetchSpy.mockResolvedValue(new Response("{}", { status: 200 }));
-    const t = makeTransport({ baseUrl: "https://noukai.xyz/api/v1" });
+    const t = makeTransport({ baseUrl: "https://noukai.dev/api/v1" });
     await t.request("GET", "/seq/acme/spelling/grade-3/execute");
     const url = fetchSpy.mock.calls[0]?.[0] as string;
-    expect(url).toBe("https://noukai.xyz/api/v1/seq/acme/spelling/grade-3/execute");
+    expect(url).toBe("https://noukai.dev/api/v1/seq/acme/spelling/grade-3/execute");
   });
 
   it("avoids double slash", async () => {
     fetchSpy.mockResolvedValue(new Response("{}", { status: 200 }));
-    const t = makeTransport({ baseUrl: "https://noukai.xyz/api/v1/" });
+    const t = makeTransport({ baseUrl: "https://noukai.dev/api/v1/" });
     await t.request("GET", "/health");
     const url = fetchSpy.mock.calls[0]?.[0] as string;
     expect(url).not.toContain("//health");

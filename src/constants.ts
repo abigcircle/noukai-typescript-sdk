@@ -1,4 +1,4 @@
-export const DEFAULT_BASE_URL = "https://api.noukai.xyz/api/v1";
+export const DEFAULT_BASE_URL = "https://api.noukai.dev/api/v1";
 export const DEV_BASE_URL = "http://localhost:8080/api/v1";
 export const DEFAULT_TIMEOUT_MS = 300_000;
 export const DEFAULT_JOB_POLL_TIMEOUT_MS = 30_000;
