@@ -35,10 +35,10 @@ describe("base URL", () => {
   beforeEach(() => { process.env = { ...originalEnv }; });
   afterEach(() => { process.env = originalEnv; });
 
-  it("defaults to api.noukai.xyz production URL", () => {
+  it("defaults to api.noukai.dev production URL", () => {
     delete process.env.NOUKAI_ENV;
     const noukai = new Noukai({ apiKey: "nk_x" });
-    expect((noukai as any)._transport.baseUrl).toBe("https://api.noukai.xyz/api/v1");
+    expect((noukai as any)._transport.baseUrl).toBe("https://api.noukai.dev/api/v1");
   });
 
   it("env: 'dev' option points at localhost:8080", () => {
@@ -49,7 +49,7 @@ describe("base URL", () => {
   it("env: 'production' option uses production URL", () => {
     delete process.env.NOUKAI_ENV;
     const noukai = new Noukai({ apiKey: "nk_x", env: "production" });
-    expect((noukai as any)._transport.baseUrl).toBe("https://api.noukai.xyz/api/v1");
+    expect((noukai as any)._transport.baseUrl).toBe("https://api.noukai.dev/api/v1");
   });
 
   it("NOUKAI_ENV=dev env var points at localhost:8080", () => {
@@ -74,7 +74,7 @@ describe("base URL", () => {
     process.env.NOUKAI_BASE_URL = "https://attacker.example.com/api/v1";
     delete process.env.NOUKAI_ENV;
     const noukai = new Noukai({ apiKey: "nk_x" });
-    expect((noukai as any)._transport.baseUrl).toBe("https://api.noukai.xyz/api/v1");
+    expect((noukai as any)._transport.baseUrl).toBe("https://api.noukai.dev/api/v1");
   });
 });
 

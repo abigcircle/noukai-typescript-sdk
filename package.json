@@ -1,6 +1,6 @@
 {
   "name": "@noukai/sdk",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TypeScript SDK for executing Noukai flows",
   "type": "module",
   "main": "./dist/index.js",
@@ -24,7 +24,7 @@
   "sideEffects": false,
   "files": ["dist", "README.md", "LICENSE", "CHANGELOG.md"],
   "license": "MIT",
-  "homepage": "https://noukai.xyz",
+  "homepage": "https://noukai.dev",
   "repository": { "type": "git", "url": "git+https://github.com/abigcircle/noukai-typescript-sdk.git" },
   "bugs": { "url": "https://github.com/abigcircle/noukai-typescript-sdk/issues" },
   "scripts": {

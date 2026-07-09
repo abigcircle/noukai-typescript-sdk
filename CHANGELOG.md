@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-06-23
+
+### Breaking
+- `StepStarted.stepIndex`, `StepPaused.stepIndex`, and `StepCompleted.stepIndex`
+  are now **required** and **guaranteed to be flow-absolute, consumer-frame
+  indices** stamped by the SDK before each event is yielded. Previously:
+  optional, and (when present from the server) segment-local — every `/step`
+  call's events restarted at `0`, leaking the SDK's pause/resume transport
+  segmentation. Consumers relying on `event.stepIndex ?? fallback` can drop
+  the fallback. The new contract holds for both live SSE and replay-mode
+  reconstruction. `step_paused.stepIndex` reports the index of the
+  just-completed step (the pause is "for" that step), matching the
+  `step_completed` that precedes it.
+- `StepCompleted` gains a `stepIndex: number` field (previously absent from
+  the wire and the type).
+
 ## [0.2.0] — 2026-06-06
 
 ### Breaking

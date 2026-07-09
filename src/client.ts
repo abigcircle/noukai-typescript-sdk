@@ -19,7 +19,7 @@ export interface NoukaiOptions {
   apiKey?: string;
   /**
    * Deployment shortcut: `"dev"` points at `http://localhost:8080/api/v1`;
-   * `"production"` (default) points at `https://api.noukai.xyz/api/v1`.
+   * `"production"` (default) points at `https://api.noukai.dev/api/v1`.
    * Falls back to `process.env.NOUKAI_ENV`.
    *
    * Note: the SDK does not accept an arbitrary base URL. All requests target

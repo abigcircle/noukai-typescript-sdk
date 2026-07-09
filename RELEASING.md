@@ -1,5 +1,13 @@
 # Releasing
 
+0. **Check parity with the Python SDK.** Both SDKs share a wire protocol and
+   are expected to stay released in lockstep. Run:
+   ```bash
+   python3 ../noukai-python-sdk/scripts/check_parity.py --ts-repo .
+   ```
+   Exit codes: `0` in sync, `1` drift detected (review the printed CHANGELOG
+   section and either port the missing changes or explicitly accept the drift),
+   `2` misconfiguration.
 1. Update `package.json` `version` and `CHANGELOG.md` (move `[Unreleased]` content under a dated heading).
 2. Commit + push to main.
 3. Tag: `git tag v0.1.0 && git push origin v0.1.0`.

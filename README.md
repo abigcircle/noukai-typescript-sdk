@@ -1,6 +1,6 @@
 # @noukai/sdk
 
-TypeScript SDK for executing [Noukai](https://noukai.xyz) flows.
+TypeScript SDK for executing [Noukai](https://noukai.dev) flows.
 
 Universal runtime — works in Node 18+, Bun, Deno, Cloudflare Workers, and Vercel Edge. ESM-only, fully typed, zero runtime dependencies.
 
@@ -83,7 +83,7 @@ const noukai = new Noukai({
 
 | Value          | Base URL                                  |
 | -------------- | ----------------------------------------- |
-| `"production"` (default) | `https://api.noukai.xyz/api/v1` |
+| `"production"` (default) | `https://api.noukai.dev/api/v1` |
 | `"dev"`        | `http://localhost:8080/api/v1`            |
 
 Falls back to the `NOUKAI_ENV` env var. The SDK does **not** accept an arbitrary base URL — all requests target Noukai's hosted endpoints.
@@ -521,7 +521,7 @@ try {
 
 ## Documentation
 
-Full guides, API reference, and examples: <https://noukai.xyz/docs/sdk/node/>
+Full guides, API reference, and examples: <https://noukai.dev/docs/sdk/node/>
 
 ## License
 

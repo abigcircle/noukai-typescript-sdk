@@ -142,6 +142,10 @@ export class EventIterator implements AsyncIterable<StreamEvent>, AsyncIterator<
 
       if (event.type === "step_completed") {
         this._accumulatedOutputs[event.stepId] = event.output;
+        // Stamp the completed step's index (flow-absolute, consumer-frame)
+        // BEFORE incrementing. The server does not populate `stepIndex` on
+        // `step_completed`; the SDK guarantees this field per the type doc.
+        event.stepIndex = this._stepIndex;
         this._stepIndex++;
         // step_completed always yields (it's the keystone for steps()).
         return { value: event, done: false };
@@ -151,6 +155,12 @@ export class EventIterator implements AsyncIterable<StreamEvent>, AsyncIterator<
         // Protocol pause between steps — close inner stream so we reopen on
         // next iteration.
         this._currentInner = null;
+        // step_paused always follows step_completed for step N. By the time
+        // we see step_paused, _stepIndex has already been incremented to
+        // N+1, so the pause's "step that just paused" index is _stepIndex-1.
+        // Per the type doc: step_paused.stepIndex matches the step_completed
+        // that precedes it (the just-completed step).
+        event.stepIndex = this._stepIndex - 1;
         if (!this.opts.yieldOnlyStepCompleted) {
           return { value: event, done: false };
         }
@@ -198,8 +208,19 @@ export class EventIterator implements AsyncIterable<StreamEvent>, AsyncIterator<
         return { value: event, done: false };
       }
 
-      // step_started, step_input, step_output — yield in raw mode, drop in
-      // steps() mode.
+      if (event.type === "step_started") {
+        // Stamp the starting step's index (flow-absolute, consumer-frame).
+        // During step_started for step N, _stepIndex === N because the
+        // increment only happens on step_completed (see above). The server
+        // emits stepIndex as segment-local (always 0); the SDK normalises.
+        event.stepIndex = this._stepIndex;
+        if (!this.opts.yieldOnlyStepCompleted) {
+          return { value: event, done: false };
+        }
+        continue;
+      }
+
+      // step_input, step_output — yield in raw mode, drop in steps() mode.
       if (!this.opts.yieldOnlyStepCompleted) {
         return { value: event, done: false };
       }

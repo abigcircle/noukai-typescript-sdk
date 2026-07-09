@@ -35,7 +35,7 @@ In the Noukai dashboard (or via the `tokenauth-vendor` API):
 
 ```bash
 # Example using the tokenauth-vendor API directly:
-curl -X POST https://api.noukai.xyz/api/v1/projects/acme/sdk-test-fixtures/keys \
+curl -X POST https://api.noukai.dev/api/v1/projects/acme/sdk-test-fixtures/keys \
   -H "Authorization: Bearer <supabase-jwt>" \
   -d '{"name": "SDK integration tests", "scopes": ["execute"]}'
 ```

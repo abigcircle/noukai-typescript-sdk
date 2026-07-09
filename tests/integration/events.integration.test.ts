@@ -187,16 +187,18 @@ describe.skipIf(!twoStepReady)("events — two-step fixture (integration)", () =
   );
 
   it(
-    "step_completed events appear in step order (stepIndex ascending)",
+    "step_started events appear in step order (stepIndex ascending)",
     async () => {
       const events = await collectEvents(twoStepFlow(client).events({ message: "step order" }));
 
-      const stepCompletedIndices = (events.filter((e) => e.type === "step_started") as StepStarted[])
-        .map((e) => e.stepIndex ?? -1);
+      const stepStartedIndices = (events.filter((e) => e.type === "step_started") as StepStarted[])
+        .map((e) => e.stepIndex);
 
-      // Verify ascending order — server should not emit steps out of order
-      for (let i = 1; i < stepCompletedIndices.length; i++) {
-        expect(stepCompletedIndices[i]).toBeGreaterThan(stepCompletedIndices[i - 1]!);
+      // SDK contract: stepIndex is flow-absolute and strictly ascending
+      // across step_started events even when the run spans multiple /step
+      // segments (no `runRemaining`).
+      for (let i = 1; i < stepStartedIndices.length; i++) {
+        expect(stepStartedIndices[i]).toBeGreaterThan(stepStartedIndices[i - 1]!);
       }
     },
     90_000,
