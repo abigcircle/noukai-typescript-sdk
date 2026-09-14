@@ -238,7 +238,7 @@ describe("tool calls in iterator", () => {
         handlerCalls.push(calls);
         return calls.map((tc) => ({
           role: "tool",
-          tool_call_id: (tc as { id: string }).id,
+          toolCallId: (tc as { id: string }).id,
           content: "ok",
         }));
       },
@@ -287,7 +287,7 @@ describe("tool calls in iterator", () => {
       .events({ message: "hi", tools: [{}] })) {
       if (e.type === "tool_calls_required") {
         await e.resume({
-          toolResults: [{ role: "tool", tool_call_id: "tc-1", content: "ok" }],
+          toolResults: [{ role: "tool", toolCallId: "tc-1", content: "ok" }],
         });
       }
       events.push(e);
@@ -298,7 +298,7 @@ describe("tool calls in iterator", () => {
     // Body 2 (after resume) carries tool results
     const second = bodies[1] ?? {};
     const tcm = second.toolCallMessages as Record<string, unknown>[];
-    expect(tcm.some((m) => m.role === "tool" && m.tool_call_id === "tc-1")).toBe(true);
+    expect(tcm.some((m) => m.role === "tool" && m.toolCallId === "tc-1")).toBe(true);
   });
 
   it("maxToolRounds throws ToolCallLimitError", async () => {
@@ -323,7 +323,7 @@ describe("tool calls in iterator", () => {
       toolHandler: (calls) =>
         calls.map((tc) => ({
           role: "tool",
-          tool_call_id: (tc as { id: string }).id,
+          toolCallId: (tc as { id: string }).id,
           content: "ok",
         })),
     });

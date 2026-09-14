@@ -31,6 +31,13 @@ export const TWO_STEP_SLUG = process.env.NOUKAI_INTEGRATION_TWO_STEP_SLUG;
 /** Slug of the tools-enabled fixture flow. */
 export const TOOLS_SLUG = process.env.NOUKAI_INTEGRATION_TOOLS_SLUG;
 
+/**
+ * Slug of the chat/agent fixture flow (`kind=chat`, tools enabled, accepts
+ * `messages[]`). Used by `messages.integration.test.ts` and
+ * `relay.integration.test.ts`.
+ */
+export const AGENT_SLUG = process.env.NOUKAI_INTEGRATION_AGENT_SLUG;
+
 // ---------------------------------------------------------------------------
 // Skip-if conditions
 // ---------------------------------------------------------------------------
@@ -60,6 +67,12 @@ export const toolsReady: boolean = integrationReady && !!TOOLS_SLUG;
  * Used by `steps.integration.test.ts` and `events.integration.test.ts`.
  */
 export const twoStepReady: boolean = integrationReady && !!TWO_STEP_SLUG;
+
+/**
+ * True when integration is ready AND the chat/agent fixture is configured.
+ * Used by `messages.integration.test.ts` and `relay.integration.test.ts`.
+ */
+export const agentReady: boolean = integrationReady && !!AGENT_SLUG;
 
 // ---------------------------------------------------------------------------
 // Client factory
@@ -116,6 +129,16 @@ export function toolsFlow(client: Noukai): Flow {
   return client.flow(TOOLS_SLUG!);
 }
 
+/**
+ * Return a Flow proxy for the chat/agent fixture (`messages[]` + tools).
+ *
+ * Only call this from inside a `describe.skipIf(!agentReady)` block.
+ */
+export function agentFlow(client: Noukai): Flow {
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  return client.flow(AGENT_SLUG!);
+}
+
 // ---------------------------------------------------------------------------
 // Minimal stub tool definition for tool-call tests
 // ---------------------------------------------------------------------------
@@ -144,7 +167,7 @@ export function weatherToolHandler(
     const fn = call.function as { name: string; arguments: string } | undefined;
     const args = fn?.arguments ? (JSON.parse(fn.arguments) as { location?: string }) : {};
     return {
-      tool_call_id: (call as { id?: string }).id ?? "stub",
+      toolCallId: (call as { id?: string }).id ?? "stub",
       role: "tool",
       content: `Weather in ${args.location ?? "unknown"}: sunny, 22°C`,
     };

@@ -132,7 +132,7 @@ describe.skipIf(!toolsReady)("tool-calls (integration)", () => {
           toolChoice: "required",
           toolHandler: (calls) => {
             return calls.map((call) => ({
-              tool_call_id: (call as { id?: string }).id ?? "stub",
+              toolCallId: (call as { id?: string }).id ?? "stub",
               role: "tool",
               content: "Temporary upstream error — retry the same call.",
             }));

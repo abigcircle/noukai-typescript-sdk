@@ -5,6 +5,7 @@ export default defineConfig({
     index: "src/index.ts",
     "adapters/express": "src/adapters/express.ts",
     "adapters/nextjs": "src/adapters/nextjs.ts",
+    "adapters/relay": "src/adapters/relay.ts",
   },
   format: ["esm"],
   dts: true,

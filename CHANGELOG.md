@@ -6,6 +6,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-14
+
+### Added
+
+- **`messages` on the request model (F6)** — `flow.execute()` accepts a
+  structured `messages?: ChatMessage[]`, mutually exclusive with `message`, for
+  chat/agent flows (design `20260903-SDK-agent-relay`, PR-2). A new permissive
+  `ChatMessage` type (`role`/`content`/`toolCalls`/`toolCallId`/`name`,
+  **camelCase** wire, open index signature) tracks
+  `llm_service.models.ChatMessage` and is exported. This brings the SDK request
+  model back in sync with the server's `SeqflowExecuteRequest`.
+- **Wire contents are camelCase (camelCase alignment).** `ChatMessage`'s tool
+  fields are `toolCalls`/`toolCallId` (were `tool_calls`/`tool_call_id`), so the
+  whole Noukai wire — envelope and message/tool contents — is camelCase. The
+  router-ai-slugs execute API accepts and emits camelCase; snake_case now lives
+  only at the external LLM-provider boundary. Callers building tool-result
+  messages for a resume should use `{ role: "tool", toolCallId, content }`.
+- **Client-side validation of the fresh-call contract** — `message`/`messages`
+  are rejected together, `messages[]` roles are restricted to
+  `user`/`assistant`/`tool` (a `system`/`function` turn throws before the wire),
+  and a `console.warn` fires as a `messages` payload approaches the server's
+  1 MB cap (`MESSAGES_TOO_LARGE`).
+- **Execute-transport seam** — a transport-pluggable `ExecuteTransport`
+  (`send(payload) -> { status, body }`) interface makes the yield/resume
+  tool-calling loop reusable across transports. `Flow.execute()` now routes
+  resume through a `DirectExecuteTransport` (today's key-holding behavior,
+  unchanged — the existing tool-call tests are the regression guard).
+- **Keyless relay entrypoint** — `createRelayFlow({ url, fetch? })` (and the
+  `RelayFlow` class) run the **same** loop over a `RelayExecuteTransport` that
+  POSTs the raw payload to a relay URL with no `nk_` key and no `/seq` path (the
+  browser / server-to-server / CLI agent position). Both fresh-call modes
+  (`message` and `messages`) are supported. `createRelayFlow`, `RelayFlow`, and
+  `RelayExecuteTransport` are exported.
+
+- **Verbatim relay transport mode + relay adapters** (design
+  `20260903-SDK-agent-relay`, PR-1) — a browser or any keyless client drives a
+  tool-calling flow without ever seeing your `nk_` key; your server is a thin
+  keyholder proxy. `RequestOptions` gains `raiseForStatus?: boolean` (default
+  `true`; when `false`, a non-2xx is returned as a `TransportResponse` rather
+  than thrown — retryable retries still apply). New relay handlers:
+  `noukaiRelayHandler(...)` (`@noukai/sdk/adapters/express`), `createRelayRoute(...)`
+  (`@noukai/sdk/adapters/nextjs`), and the framework-agnostic
+  `@noukai/sdk/adapters/relay` core (`RelayBounds`, `boundAndParseBody`,
+  `forwardToFlow`). The relay bounds the raw body before parse (`413`), bounds
+  message counts, rejects malformed JSON (`400`), awaits your `authorize` hook
+  (throw to reject; a numeric `status` is honored, else `403`), then forwards
+  verbatim to `/seq/{org}/{project}/{slug}/execute` with the `nk_` bearer
+  injected, relaying the upstream `(status, body)` verbatim (non-JSON →
+  `{ detail: "UPSTREAM_NON_JSON" }`). It never logs the key or the body.
+
+### Changed
+
+- **Client round limit reconciled to one value.** The keyless relay loop uses
+  the SDK's `DEFAULT_MAX_TOOL_ROUNDS` (**10**), reconciling the two historical
+  limits (SDK `10` vs the extracted `@noukai/agent`'s `12`). When
+  `@noukai/agent` is re-expressed over this loop (PR-3), its effective limit
+  becomes `10` — a deliberate, documented one-round-fewer change for that path.
+
+### Fixed
+
+Post-review parity and correctness fixes (design `20260903-SDK-agent-relay`),
+landed with the matching Python fixes in lockstep:
+
+- **Relay forward no longer retries the non-idempotent POST.** The relay
+  forwards with `idempotent: false`, so a transient upstream 429/5xx is relayed
+  verbatim instead of silently re-submitting the `/execute` POST (a duplicate
+  flow-run risk, and a divergence from the Python relay). `RequestOptions` gains
+  `idempotent?: boolean`.
+- **Empty `messages: []` is omitted from the wire** (matches Python), and a
+  `messages` entry missing a string `role` is rejected client-side rather than
+  forwarded.
+- **The `messages` size soft-warning fires once per process** (was every call) —
+  parity with the Python peer.
+- **An explicit `maxToolRounds` of `0`/negative is honored** (raises
+  immediately) instead of being clamped to the default — matches the Python loop.
+- **The relay `version`** rejects an invalid value (e.g. `"production"`) instead
+  of silently coercing it to `draft` and serving the wrong flow version.
+- **The Next.js relay** handles a null-body upstream status (204/205/304)
+  instead of throwing a `TypeError` that surfaced as a 500.
+- **Typed errors from non-standard error bodies** carry a readable `.message`
+  (a top-level `error`/`message`, else the JSON) instead of `"[object Object]"`.
+
 ## [0.3.0] — 2026-06-23
 
 ### Breaking

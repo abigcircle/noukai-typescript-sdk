@@ -217,7 +217,7 @@ const result = await flow.execute({
   ],
   toolHandler: async (toolCalls) => {
     return toolCalls.map((call) => ({
-      tool_call_id: call.id,
+      toolCallId: call.id,
       output: JSON.stringify(getWeather(call.function.arguments)),
     }));
   },
@@ -241,6 +241,129 @@ console.log(result.result);
 ```
 
 During streaming, `ToolCallsRequired` events expose the same `.resume({ toolResults })` method.
+
+### Structured `messages` (chat / agent flows)
+
+`execute()` accepts a structured `messages` list — mutually exclusive with `message` — for chat and agent flows. The last entry is the current user turn:
+
+```typescript
+const result = await flow.execute({
+  messages: [{ role: "user", content: "Draft a spelling pack for grade 3" }],
+  tools: [...],
+  toolChoice: "auto",
+});
+```
+
+Roles must be `user`, `assistant`, or `tool` — a `system`/`function` turn is rejected client-side (it would override the flow author's system prompt). The SDK also warns as a `messages` payload approaches the server's 1 MB cap.
+
+### Driving the loop through a relay
+
+When your code holds **no** `nk_` key — a browser, or a server-to-server / CLI agent talking to a keyholder relay — point the **same** tool-calling loop at the relay endpoint with `createRelayFlow`. Each round is POSTed to the relay keyless; the relay injects the key and forwards to the flow:
+
+```typescript
+import { createRelayFlow } from "@noukai/sdk";
+
+const flow = createRelayFlow({ url: "/agent/execute" }); // pass fetch? for a custom runtime
+const result = await flow.execute({
+  messages: [{ role: "user", content: "..." }],
+  tools: [...],
+  toolHandler: myTools, // identical handler API to flow.execute()
+});
+```
+
+The loop, the client round limit (`10`), and the `PausedResult` you get back are identical to `flow.execute()` — only the transport differs (keyless relay vs the key-holding direct transport). A full runnable example is in [`examples/relay-client.ts`](examples/relay-client.ts).
+
+Pass `timeout` (seconds) to bound each relay round-trip so a hung relay can't stall the loop forever — `createRelayFlow({ url, timeout: 30 })`. It defaults to the SDK's `300` s and combines with any per-call `signal` (either aborts the request).
+
+## Serving a flow to a browser (relay)
+
+A **relay** lets a browser (or any keyless client) drive a tool-calling flow
+without ever seeing your `nk_` key. Your server holds the key and mounts a thin
+relay endpoint: it bounds abuse, runs your own authorization hook, then forwards
+the request **verbatim** to the flow's `/execute` endpoint and relays the
+upstream response back unchanged. The browser drives the loop and executes tools;
+your server is a keyholder proxy.
+
+The relay never interprets the business payload, never logs the key or body, and
+passes upstream 4xx/5xx through verbatim (built on the transport's
+`raiseForStatus: false` mode).
+
+```typescript
+import express from "express";
+import { Noukai } from "@noukai/sdk";
+import { noukaiRelayHandler } from "@noukai/sdk/adapters/express";
+
+const noukai = new Noukai({ apiKey: "nk_..." }); // holds the key server-side
+const app = express();
+
+app.post(
+  "/agent/execute",
+  noukaiRelayHandler({
+    client: noukai,
+    org: "acme",
+    project: "spelling",
+    slug: "pack-maker",
+    // Your app's authorization — throw to reject. Never baked into the SDK.
+    authorize: (req) => {
+      if (req.headers["x-role"] !== "maker") {
+        throw Object.assign(new Error("maker role required"), { status: 403 });
+      }
+    },
+    bounds: { maxBodyBytes: 262_144, maxMessages: 40 },
+  }),
+);
+```
+
+Mount the relay route **without** a JSON body parser so it can bound the raw
+bytes before parse. The browser POSTs `{ messages, tools, toolChoice }` (or a
+resume payload) with no key and receives the flow's response verbatim. Bounds
+violations return `413 { detail: "BODY_TOO_LARGE" }` / `413 { detail:
+"TOO_MANY_MESSAGES" }`; malformed JSON returns `400 { detail: "INVALID_JSON" }`;
+a non-JSON upstream returns `{ detail: "UPSTREAM_NON_JSON" }` at the upstream
+status.
+
+Next.js App Router gets the Route Handler equivalent:
+
+```typescript
+// app/agent/execute/route.ts
+import { Noukai } from "@noukai/sdk";
+import { createRelayRoute } from "@noukai/sdk/adapters/nextjs";
+
+const noukai = new Noukai({ apiKey: process.env.NOUKAI_API_KEY });
+
+export const POST = createRelayRoute({
+  client: noukai,
+  org: "acme",
+  project: "spelling",
+  slug: "pack-maker",
+  authorize: async (req) => {
+    if (req.headers.get("x-role") !== "maker") {
+      throw Object.assign(new Error("maker role required"), { status: 403 });
+    }
+  },
+  bounds: { maxBodyBytes: 262_144, maxMessages: 40 },
+});
+```
+
+The TS `authorize` hook signals rejection by **throwing**: an error optionally
+carrying a numeric `status` or `statusCode` sets the response status (the thrown
+error's message is never echoed to the client — it defaults to `403`). This
+differs from the Python peer, where `authorize` raises the framework's
+`HTTPException` directly.
+
+A full runnable example lives in [`examples/relay-express.ts`](examples/relay-express.ts).
+For the complete relay spec — the three positions (serve / keyless client /
+React agent), the authoritative wire contract, the error table, and an
+implementation checklist — see [`docs/AGENT_RELAY.md`](docs/AGENT_RELAY.md).
+
+> **Notes.** The relay reads the raw body with a hard byte cap (streamed, so an
+> oversized body is rejected mid-read — it is never fully buffered). Do **not**
+> enable `logPayloads` on a relay client: the forwarded browser payload and the
+> upstream body would then reach your log handler (the `nk_` key is never logged
+> regardless). On a connection/timeout to the upstream the relay returns
+> `502 { detail: "UPSTREAM_UNAVAILABLE" }`. For strictly verbatim status
+> passthrough, construct the relay's client with `maxRetries: 0` — the TS
+> transport otherwise retries a retryable upstream 5xx before relaying it.
 
 ## Replay & session grouping (experimental)
 
@@ -522,6 +645,10 @@ try {
 ## Documentation
 
 Full guides, API reference, and examples: <https://noukai.dev/docs/sdk/node/>
+
+- [Agent-over-relay implementation guide](docs/AGENT_RELAY.md) — serve a flow to
+  a browser, drive it keyless, and the `@noukai/agent` React layer, with the
+  wire contract and a checklist (written for LLMs implementing relays).
 
 ## License
 

@@ -1,10 +1,16 @@
 import type { ExecuteResult, PausedResult, JobAccepted } from "./types/responses.js";
-import type { ExecuteRequest } from "./types/requests.js";
+import type { ChatMessage, ExecuteRequest } from "./types/requests.js";
 import type { StepCompleted, StreamEvent } from "./types/events.js";
 import type { Transport } from "./transport.js";
 import { Run } from "./run.js";
 import { Job } from "./job.js";
-import { attachResume, autoResumeLoop } from "./tool-calls.js";
+import {
+  DirectExecuteTransport,
+  attachResume,
+  autoResumeLoop,
+  checkMessagesPayloadSize,
+  validateFreshCall,
+} from "./tool-calls.js";
 import { makeStepsIterator, makeEventsIterator } from "./step-iterator.js";
 import { DEFAULT_MAX_TOOL_ROUNDS, HEADER_SESSION_ID } from "./constants.js";
 import { flowExecutePath, flowJobsSubmitPath } from "./paths.js";
@@ -17,6 +23,12 @@ export type ToolHandler = (
 
 export interface ExecuteOptions {
   message?: string;
+  /**
+   * Structured prior conversation for chat/agent flows; the last entry is the
+   * current user turn. Mutually exclusive with `message`. Roles must be
+   * `user`/`assistant`/`tool` (validated client-side).
+   */
+  messages?: ChatMessage[];
   parameters?: Record<string, unknown>;
   blockOverrides?: Record<string, Record<string, unknown>>;
   attachments?: Record<string, unknown>[];
@@ -115,6 +127,10 @@ export class Flow {
   async execute(options: ExecuteOptions = {}): Promise<ExecuteResult | PausedResult> {
     const version = options.version ?? "draft";
 
+    // Client-side validation of the server's fresh-call contract (F6).
+    validateFreshCall(options.message, options.messages);
+    checkMessagesPayloadSize(options.messages);
+
     if (version === "production") {
       throw new Error(
         "Flow.execute({version: 'production'}) is not yet supported. " +
@@ -150,6 +166,9 @@ export class Flow {
     // Build request using conditional spreads to satisfy exactOptionalPropertyTypes.
     const req: ExecuteRequest = {
       ...(options.message !== undefined ? { message: options.message } : {}),
+      ...(options.messages !== undefined && options.messages.length > 0
+        ? { messages: options.messages }
+        : {}),
       ...(options.parameters !== undefined ? { parameters: options.parameters } : {}),
       ...(options.blockOverrides !== undefined ? { blockOverrides: options.blockOverrides } : {}),
       ...(options.attachments !== undefined ? { attachments: options.attachments } : {}),
@@ -188,15 +207,15 @@ export class Flow {
       if (effectiveSid !== null) {
         (paused as { sessionId?: string }).sessionId = effectiveSid;
       }
-      attachResume(paused, this, {
+      // Route resume through the execute-transport seam (the direct transport
+      // preserves today's key-holding behavior byte-for-byte).
+      attachResume(paused, new DirectExecuteTransport(this, version, options.timeout), {
         ...(options.parameters !== undefined ? { parameters: options.parameters } : {}),
         ...(options.blockOverrides !== undefined ? { blockOverrides: options.blockOverrides } : {}),
         ...(options.attachments !== undefined ? { attachments: options.attachments } : {}),
         ...(options.tools !== undefined ? { tools: options.tools } : {}),
         ...(options.toolChoice !== undefined ? { toolChoice: options.toolChoice } : {}),
         ...(options.trace !== undefined ? { trace: options.trace } : {}),
-        version,
-        ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
       });
       if (options.toolHandler !== undefined) {
         return await autoResumeLoop(

@@ -12,7 +12,7 @@ function pausedPayload({ iterations = 1, toolId = "tc-1" } = {}) {
     iterationsUsed: iterations,
     toolCallMessages: [
       { role: "user", content: "search" },
-      { role: "assistant", tool_calls: [{ id: toolId, function: { name: "search", arguments: "{}" } }] },
+      { role: "assistant", toolCalls: [{ id: toolId, function: { name: "search", arguments: "{}" } }] },
     ],
     toolCalls: [{ id: toolId, function: { name: "search", arguments: "{}" } }],
     accumulatedOutputs: { "step-0": { context: "..." } },
@@ -55,14 +55,14 @@ describe("manual resume", () => {
       .execute({ message: "hi", tools: [{ type: "function" }] });
     expect(paused.requiresToolCalls).toBe(true);
     const final = await (paused as any).resume({
-      toolResults: [{ role: "tool", tool_call_id: "tc-1", content: "result" }],
+      toolResults: [{ role: "tool", toolCallId: "tc-1", content: "result" }],
     });
     expect(final.requiresToolCalls).toBe(false);
     const second = bodies[1];
     expect(second.executionId).toBe("exec-1");
     expect(second.pausedAtStep).toBe("step-1");
     expect(second.iterationsUsed).toBe(1);
-    expect(second.toolCallMessages.at(-1)).toMatchObject({ role: "tool", tool_call_id: "tc-1" });
+    expect(second.toolCallMessages.at(-1)).toMatchObject({ role: "tool", toolCallId: "tc-1" });
   });
 
   it("resume can yield another paused", async () => {
@@ -78,11 +78,11 @@ describe("manual resume", () => {
       .flow("a/b/c").execute({ message: "hi", tools: [{}] });
     expect(first.requiresToolCalls).toBe(true);
     const second = await (first as any).resume({
-      toolResults: [{ role: "tool", tool_call_id: "tc-1", content: "x" }],
+      toolResults: [{ role: "tool", toolCallId: "tc-1", content: "x" }],
     });
     expect(second.requiresToolCalls).toBe(true);
     const third = await (second as any).resume({
-      toolResults: [{ role: "tool", tool_call_id: "tc-2", content: "y" }],
+      toolResults: [{ role: "tool", toolCallId: "tc-2", content: "y" }],
     });
     expect(third.requiresToolCalls).toBe(false);
   });
@@ -101,7 +101,7 @@ describe("auto resume (toolHandler)", () => {
       tools: [{ type: "function", function: { name: "search" } }],
       toolHandler: (toolCalls) => {
         handlerCalls.push(toolCalls);
-        return toolCalls.map((tc: any) => ({ role: "tool", tool_call_id: tc.id, content: "ok" }));
+        return toolCalls.map((tc: any) => ({ role: "tool", toolCallId: tc.id, content: "ok" }));
       },
     });
     expect(result.requiresToolCalls).toBe(false);
@@ -123,7 +123,7 @@ describe("auto resume (toolHandler)", () => {
       message: "hi", tools: [{}],
       toolHandler: (calls) => {
         handlerCalls.push(calls);
-        return calls.map((tc: any) => ({ role: "tool", tool_call_id: tc.id, content: "ok" }));
+        return calls.map((tc: any) => ({ role: "tool", toolCallId: tc.id, content: "ok" }));
       },
     });
     expect(result.requiresToolCalls).toBe(false);
@@ -138,7 +138,7 @@ describe("auto resume (toolHandler)", () => {
     const result = await new Noukai({ apiKey: "nk_x" }).flow("a/b/c").execute({
       message: "hi", tools: [{}],
       toolHandler: async (calls) =>
-        calls.map((tc: any) => ({ role: "tool", tool_call_id: tc.id, content: "ok" })),
+        calls.map((tc: any) => ({ role: "tool", toolCallId: tc.id, content: "ok" })),
     });
     expect(result.requiresToolCalls).toBe(false);
   });
@@ -151,7 +151,7 @@ describe("auto resume (toolHandler)", () => {
       new Noukai({ apiKey: "nk_x" }).flow("a/b/c").execute({
         message: "hi", tools: [{}], maxToolRounds: 3,
         toolHandler: (calls) =>
-          calls.map((tc: any) => ({ role: "tool", tool_call_id: tc.id, content: "ok" })),
+          calls.map((tc: any) => ({ role: "tool", toolCallId: tc.id, content: "ok" })),
       }),
     ).rejects.toBeInstanceOf(ToolCallLimitError);
   });
@@ -168,7 +168,7 @@ describe("auto resume (toolHandler)", () => {
     try {
       await new Noukai({ apiKey: "nk_x" }).flow("a/b/c").execute({
         message: "hi", tools: [{}], maxToolRounds: 10,
-        toolHandler: (cs) => cs.map((tc: any) => ({ role: "tool", tool_call_id: tc.id, content: "x" })),
+        toolHandler: (cs) => cs.map((tc: any) => ({ role: "tool", toolCallId: tc.id, content: "x" })),
       });
       throw new Error("expected throw");
     } catch (e) {

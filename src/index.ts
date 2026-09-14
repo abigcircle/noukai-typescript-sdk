@@ -8,6 +8,19 @@ export { Flow } from "./flow.js";
 export { Run } from "./run.js";
 export { Job } from "./job.js";
 
+// Keyless relay entrypoint (agent-over-relay — design 20260903-SDK-agent-relay)
+export {
+  createRelayFlow,
+  RelayFlow,
+  type CreateRelayFlowOptions,
+  type RelayExecuteOptions,
+} from "./relay-flow.js";
+export {
+  RelayExecuteTransport,
+  type ExecuteTransport,
+  type RelayExecuteTransportOptions,
+} from "./tool-calls.js";
+
 // Result types
 export type {
   ExecuteResult,
@@ -17,7 +30,7 @@ export type {
 } from "./types/responses.js";
 
 // Request types (exported for users building helpers)
-export type { ExecuteRequest, StepRequest } from "./types/requests.js";
+export type { ChatMessage, ExecuteRequest, StepRequest } from "./types/requests.js";
 
 // Events
 export type {

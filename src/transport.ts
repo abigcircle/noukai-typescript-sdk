@@ -37,6 +37,22 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Per-request headers merged on top of the client-level base headers. */
   extraHeaders?: Record<string, string>;
+  /**
+   * When `true` (default) a non-2xx response throws the mapped typed error.
+   * When `false`, the `TransportResponse` is returned even on non-2xx (retries
+   * still apply for retryable statuses first). The relay adapter uses this to
+   * forward upstream 4xx/5xx statuses to the browser verbatim
+   * (design 20260903-SDK-agent-relay). Connection/timeout errors still throw
+   * regardless — there is no response to return.
+   */
+  raiseForStatus?: boolean;
+  /**
+   * When `false`, a retryable status (429/5xx) is NOT retried — the first
+   * response is used as-is. Defaults to retrying (today's behavior). The relay
+   * forward sets this so a non-idempotent POST is never silently re-submitted,
+   * matching the Python transport (which never retries POST/PATCH).
+   */
+  idempotent?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,6 +165,29 @@ function parseErrorDetail(body: unknown): ErrorDetail | null {
   return { code: d.code, message: d.message };
 }
 
+/**
+ * Best-effort human-readable message for an error body that is NOT the standard
+ * `{detail:{code,message}}` shape. Avoids `String(body)` producing
+ * "[object Object]" for a plain-object error body (e.g. a proxy's `{error:"…"}`
+ * or a bare `{}`) — surfaces a top-level `message`/`error` string, else the
+ * JSON, else the HTTP status.
+ */
+function errorMessageFromBody(body: unknown, status: number): string {
+  if (body !== null && typeof body === "object") {
+    const b = body as Record<string, unknown>;
+    if (typeof b.message === "string" && b.message.length > 0) return b.message;
+    if (typeof b.error === "string" && b.error.length > 0) return b.error;
+    try {
+      const s = JSON.stringify(body);
+      if (s !== "{}") return s;
+    } catch {
+      /* fall through to status */
+    }
+    return `HTTP ${String(status)}`;
+  }
+  return String(body);
+}
+
 function mapStatusToError(
   status: number,
   body: unknown,
@@ -157,7 +196,7 @@ function mapStatusToError(
 ): NoukaiError {
   const detail = parseErrorDetail(body);
   const code = detail?.code;
-  const message = detail?.message ?? String(body);
+  const message = detail?.message ?? errorMessageFromBody(body, status);
 
   // Build init carefully for exactOptionalPropertyTypes: omit undefined optionals.
   const baseInit = {
@@ -188,6 +227,19 @@ function mapStatusToError(
     default:
       return new FlowExecutionError(message, baseInit);
   }
+}
+
+/**
+ * Map an `(status, body)` to the SDK's typed error, for callers that hold a
+ * status+body but not a `Response` (the execute-transport seam: a relay returns
+ * the upstream status verbatim and the shared loop maps a non-2xx here — the
+ * same taxonomy the direct transport throws). Headers are absent, so
+ * header-derived fields like `Retry-After` are not populated.
+ *
+ * @internal
+ */
+export function errorForExecuteStatus(status: number, body: unknown): NoukaiError {
+  return mapStatusToError(status, body, new Headers(), null);
 }
 
 // ---------------------------------------------------------------------------
@@ -413,7 +465,11 @@ export class Transport {
 
       // Retryable 5xx (and 429) — retry if we have attempts left
       // Note: 429 is retryable by backoff but we still throw after exhaustion
-      if (RETRYABLE_STATUS.has(resp.status) && attempt < this.maxRetries) {
+      if (
+        opts.idempotent !== false &&
+        RETRYABLE_STATUS.has(resp.status) &&
+        attempt < this.maxRetries
+      ) {
         this.log({
           phase: "retry",
           method,
@@ -424,6 +480,18 @@ export class Transport {
         });
         await sleep(backoffMs(attempt));
         continue;
+      }
+
+      // Non-raising mode (relay adapter): hand the response back on non-2xx
+      // instead of throwing, so a verbatim relay can forward the upstream
+      // status/body through unchanged. Retries above still applied first.
+      if (opts.raiseForStatus === false) {
+        return {
+          statusCode: resp.status,
+          body: bodyData as T,
+          requestId,
+          headers: resp.headers,
+        };
       }
 
       // Non-retryable or exhausted — throw typed error

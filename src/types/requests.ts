@@ -1,9 +1,37 @@
 /**
+ * A single structured chat turn (design 20260903-SDK-agent-relay, F6).
+ *
+ * Tracks the shared `llm_service.models.ChatMessage` shape:
+ * `role`/`content`/`toolCalls`/`toolCallId`/`name`. Deliberately permissive
+ * — the SDK's job is to *express* `messages`, not re-police it; the server
+ * validates. Field names are **camelCase**, matching the Noukai wire (the
+ * router-ai-slugs execute API accepts/emits camelCase for message contents;
+ * snake_case now lives only at the external LLM-provider boundary). Unknown
+ * fields pass through via the index signature.
+ *
+ * `role` is typed permissively; the SDK still rejects `system`/`function` (and
+ * any non user|assistant|tool role) client-side before the request goes out.
+ */
+export interface ChatMessage {
+  role: string;
+  content?: unknown;
+  toolCalls?: Record<string, unknown>[];
+  toolCallId?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+/**
  * POST /seq/{org}/{project}/{slug}/execute body.
  * camelCase matches the server wire format (Pydantic `serialization_alias`).
  */
 export interface ExecuteRequest {
   message?: string | null;
+  /**
+   * Structured prior conversation for chat/agent flows; the last entry is the
+   * current user turn. When set it stands in for `message` (server contract).
+   */
+  messages?: ChatMessage[];
   parameters?: Record<string, unknown>;
   blockOverrides?: Record<string, Record<string, unknown>>;
   attachments?: Record<string, unknown>[];

@@ -37,6 +37,7 @@
 import type { Noukai } from "../client.js";
 import { HEADER_REPLAY, HEADER_RESPONSE_SESSION } from "../constants.js";
 import {
+  APIConnectionError,
   ReplayError,
   ReplayForbiddenError,
   ReplayInvalidSessionError,
@@ -45,6 +46,15 @@ import {
   ReplaySessionNotFoundError,
 } from "../errors.js";
 import { traceScope, currentSessionId } from "../replay/scope.js";
+import type { RelayReject } from "./relay.js";
+import {
+  authRejectionResponse,
+  boundAndParseBody,
+  forwardToFlow,
+  resolveBounds,
+  type FlowRelayConfig,
+  type RelayBounds,
+} from "./relay.js";
 
 export interface WithNoukaiTraceOptions {
   /**
@@ -151,4 +161,149 @@ function mapReplayError(e: unknown): Response {
   }
   // Non-replay error — re-throw so the caller's error boundary handles it.
   throw e;
+}
+
+// ---------------------------------------------------------------------------
+// Flow relay route (design 20260903-SDK-agent-relay, PR-1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Options for {@link createRelayRoute}. Mirrors the Python `mount_flow_relay`
+ * signature (auth hook + bounds + a pinned flow).
+ */
+export interface CreateRelayRouteOptions {
+  /** A `Noukai` client — holds the `nk_` bearer injected on the forwarded call. */
+  client: Noukai;
+  org: string;
+  project: string;
+  slug: string;
+  /**
+   * Awaited before forwarding. Throw to reject; an error carrying a numeric
+   * `status`/`statusCode` is honored, otherwise a `403 FORBIDDEN` is returned.
+   * App authorization belongs here, never in the SDK. NOTE: returning —
+   * including a falsy value — is treated as ALLOW; you MUST throw to deny.
+   */
+  authorize: (req: Request) => void | Promise<void>;
+  /** Abuse bounds (default 256 KiB / 40). */
+  bounds?: RelayBounds;
+  /** `"draft"` (default) or a published integer version. */
+  version?: "draft" | number;
+}
+
+// Statuses that must not carry a response body — the Web `Response` constructor
+// throws a `TypeError` if a body is supplied with one. A verbatim relay can
+// surface these from an upstream gateway/CDN (e.g. 204/304), so drop the body
+// and preserve the status instead of throwing (which Next.js turns into a 500).
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
+function relayJson(body: unknown, status: number): Response {
+  if (NULL_BODY_STATUSES.has(status)) {
+    return new Response(null, { status });
+  }
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/**
+ * Read a Web `Request` body via its `ReadableStream`, aborting the read the
+ * moment the running byte total exceeds `maxBytes`. Mirrors the Express
+ * mid-read cap so a chunked / content-length-less body cannot force unbounded
+ * buffering (a bare `req.text()` buffers the whole body first).
+ */
+async function readRequestCapped(
+  req: Request,
+  maxBytes: number,
+): Promise<{ raw: string } | { reject: RelayReject }> {
+  const stream = req.body;
+  if (stream === null) return { raw: "" };
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.length;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return { reject: { status: 413, detail: "BODY_TOO_LARGE" } };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return { reject: { status: 400, detail: "INVALID_JSON" } };
+  }
+  let len = 0;
+  for (const c of chunks) len += c.length;
+  const merged = new Uint8Array(len);
+  let off = 0;
+  for (const c of chunks) {
+    merged.set(c, off);
+    off += c.length;
+  }
+  return { raw: new TextDecoder().decode(merged) };
+}
+
+/**
+ * Build a Next.js App Router Route Handler that relays a keyless browser POST
+ * to a single flow.
+ *
+ * Reads the raw body (`req.text()`, with a `content-length` fast-path) → bounds
+ * it → `await authorize(req)` → forwards verbatim to
+ * `/seq/{org}/{project}/{slug}/execute` with the `nk_` bearer
+ * (`raiseForStatus: false`) → relays the upstream `(status, body)`.
+ *
+ * Usage:
+ *   // app/agent/execute/route.ts
+ *   export const POST = createRelayRoute({ client, org, project, slug, authorize });
+ */
+export function createRelayRoute(
+  options: CreateRelayRouteOptions,
+): (req: Request) => Promise<Response> {
+  const bounds = resolveBounds(options.bounds);
+  const config: FlowRelayConfig = {
+    client: options.client,
+    org: options.org,
+    project: options.project,
+    slug: options.slug,
+    ...(options.bounds !== undefined ? { bounds: options.bounds } : {}),
+    ...(options.version !== undefined ? { version: options.version } : {}),
+  };
+
+  return async (req: Request): Promise<Response> => {
+    // Fast-path: reject oversize bodies via the declared content-length before
+    // reading at all. The streamed read below is the real cap (it aborts
+    // mid-read), so a chunked / content-length-less body is also bounded.
+    const contentLength = req.headers.get("content-length");
+    if (contentLength !== null && Number(contentLength) > bounds.maxBodyBytes) {
+      return relayJson({ detail: "BODY_TOO_LARGE" }, 413);
+    }
+
+    const read = await readRequestCapped(req, bounds.maxBodyBytes);
+    if ("reject" in read) {
+      return relayJson({ detail: read.reject.detail }, read.reject.status);
+    }
+    const parsed = boundAndParseBody(read.raw, bounds);
+    if ("reject" in parsed) {
+      return relayJson({ detail: parsed.reject.detail }, parsed.reject.status);
+    }
+    try {
+      await options.authorize(req);
+    } catch (e) {
+      const rej = authRejectionResponse(e);
+      return relayJson({ detail: rej.detail }, rej.status);
+    }
+    try {
+      const outcome = await forwardToFlow(config, parsed.payload);
+      return relayJson(outcome.body, outcome.status);
+    } catch (e) {
+      // No upstream status to relay (connection/timeout) — signal 502.
+      if (e instanceof APIConnectionError) {
+        return relayJson({ detail: "UPSTREAM_UNAVAILABLE" }, 502);
+      }
+      throw e;
+    }
+  };
 }

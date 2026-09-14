@@ -10,6 +10,6 @@
       "@noukai/sdk/adapters/relay": ["./src/adapters/relay.ts"]
     }
   },
-  "include": ["src/**/*", "tests/**/*", "examples/**/*", "eslint.config.js", "tsup.config.ts", "vitest.config.ts"],
+  "include": ["src/**/*", "examples/**/*"],
   "exclude": ["dist", "node_modules"]
 }
