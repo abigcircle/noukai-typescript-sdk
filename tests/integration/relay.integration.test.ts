@@ -39,9 +39,6 @@ import {
 } from "./helpers.js";
 
 describe.skipIf(!agentReady)("agent relay round-trip (integration)", () => {
-  const [org, project] = INTEGRATION_PROJECT!.split("/", 2) as [string, string];
-  const slug = AGENT_SLUG!;
-
   // Every server + client started by a test is torn down in afterEach.
   const servers: Server[] = [];
   const clients: Noukai[] = [];
@@ -56,6 +53,13 @@ describe.skipIf(!agentReady)("agent relay round-trip (integration)", () => {
   } = {}): Promise<string> {
     const client = makeClient();
     clients.push(client);
+
+    // Resolve coords here, not in the describe body: vitest runs the suite
+    // callback at collection even when skipIf skips it, so touching
+    // INTEGRATION_PROJECT / AGENT_SLUG at that level throws when the integration
+    // env is absent (e.g. CI). startRelay only runs inside a non-skipped test.
+    const [org, project] = INTEGRATION_PROJECT!.split("/", 2) as [string, string];
+    const slug = AGENT_SLUG!;
 
     const app = express();
     // Deliberately no express.json() — the relay reads the raw body itself.
