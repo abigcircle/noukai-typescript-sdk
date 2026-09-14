@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-09-14
+
+### Fixed
+
+- **Browser-safe replay scope** — `replay/scope.ts` constructed a module-level
+  `AsyncLocalStorage` at import time, so importing the SDK barrel in a browser
+  bundle (e.g. `createRelayFlow` via `@noukai/agent`) threw `AsyncLocalStorage is
+  not a constructor`: bundlers externalize `node:async_hooks` to an empty module
+  off-Node, leaving the constructor `undefined`. The scope storage now falls back
+  to a no-op ("no active scope") when `AsyncLocalStorage` is unavailable. Node
+  behavior is unchanged — replay/capture is server-only — and the package now
+  honors its declared `"sideEffects": false` in browser bundlers.
+
 ## [0.4.0] — 2026-09-14
 
 ### Added

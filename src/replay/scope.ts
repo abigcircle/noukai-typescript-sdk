@@ -5,8 +5,29 @@ import { REPLAY_ENABLED_ENV_VAR } from "../constants.js";
 import { ReplayNoSnapshotsError, ReplayLeftoverError } from "../errors.js";
 import type { Transport } from "../transport.js";
 
-/** Module-level AsyncLocalStorage; undefined when no scope is active. */
-export const scopeStorage = new AsyncLocalStorage<ScopeState>();
+/** The subset of AsyncLocalStorage the SDK actually uses. */
+interface ScopeStorage {
+  getStore(): ScopeState | undefined;
+  run<R>(store: ScopeState, callback: () => R): R;
+}
+
+/**
+ * Module-level scope storage; empty when no scope is active.
+ *
+ * Node gets a real `AsyncLocalStorage` for async-context tracking. In the browser
+ * `node:async_hooks` is externalized to an empty module (so `AsyncLocalStorage` is
+ * `undefined`) and replay/capture is a server-only feature the browser never runs,
+ * so fall back to a no-op that reports "no active scope". This keeps the module
+ * side-effect-free off-Node — importing the SDK barrel (e.g. for `createRelayFlow`)
+ * no longer throws `AsyncLocalStorage is not a constructor` in a browser bundle.
+ */
+export const scopeStorage: ScopeStorage =
+  typeof AsyncLocalStorage === "function"
+    ? new AsyncLocalStorage<ScopeState>()
+    : {
+        getStore: () => undefined,
+        run: <R>(_store: ScopeState, callback: () => R): R => callback(),
+      };
 
 export function currentSessionId(): string | null {
   const s = scopeStorage.getStore();
