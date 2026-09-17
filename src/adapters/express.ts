@@ -1,7 +1,7 @@
 /**
- * Express/Connect middleware for the Noukai trace feature.
+ * Express/Connect middleware for the Noukai replay feature.
  *
- * Reads `X-Noukai-Replay` from the incoming request, opens a `traceScope`
+ * Reads `X-Noukai-Replay` from the incoming request, opens a `replayScope`
  * around the downstream handler chain, and writes `X-Noukai-Session` on the
  * response in capture mode.
  *
@@ -16,7 +16,7 @@
  * or introduce a per-request client factory — that is deferred to v1.1.
  *
  * **Response header injection via `res.writeHead` monkey-patch (Option B from
- * phase doc § 8.4):** By the time `traceScope`'s callback resolves, Express has
+ * phase doc § 8.4):** By the time `replayScope`'s callback resolves, Express has
  * already committed the response. Hooking `res.on("finish")` is too late —
  * headers are already flushed. Monkey-patching `res.writeHead` is the only
  * reliable interception point before headers are sent. We do it once at
@@ -24,7 +24,7 @@
  *
  * **Wrapping `next` in a Promise:** Express doesn't return a Promise from
  * `next()`. To run the handler chain inside `AsyncLocalStorage.run` (via
- * `traceScope`) we wrap `next` in a Promise that resolves/rejects when the
+ * `replayScope`) we wrap `next` in a Promise that resolves/rejects when the
  * downstream handler signals completion. This is the same pattern used by
  * `express-async-handler`.
  *
@@ -46,7 +46,7 @@ import {
   ReplaySessionExpiredError,
   ReplaySessionNotFoundError,
 } from "../errors.js";
-import { traceScope, currentSessionId } from "../replay/scope.js";
+import { replayScope, currentSessionId } from "../replay/scope.js";
 import {
   authRejectionResponse,
   boundAndParseBody,
@@ -123,8 +123,8 @@ export function noukaiTraceMiddleware(
     };
 
     // Wrap `next` in a Promise so we can await the downstream chain completion
-    // inside traceScope (which runs the body inside AsyncLocalStorage.run).
-    traceScope(
+    // inside replayScope (which runs the body inside AsyncLocalStorage.run).
+    replayScope(
       () =>
         new Promise<void>((resolve, reject) => {
           const wrappedNext: NextFn = (err?: unknown) => {

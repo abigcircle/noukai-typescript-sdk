@@ -9,7 +9,7 @@
  * interprets the business payload.
  *
  * This module holds the shared logic (bounds + parse + verbatim forward). The
- * framework handlers live next to the existing trace adapters:
+ * framework handlers live next to the existing replay adapters:
  *   - `noukaiRelayHandler` in `adapters/express.ts`
  *   - `createRelayRoute`   in `adapters/nextjs.ts`
  * mirroring the Python `adapters/relay.py` (one file, two framework variants).

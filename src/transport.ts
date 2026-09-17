@@ -115,7 +115,7 @@ function combineSignals(signals: (AbortSignal | undefined)[]): AbortSignal {
  * `extraHeaders` would silently overwrite auth, version pinning, or request-id
  * provenance — `applyExtraHeaders` strips them instead. The replay subsystem
  * is the main caller of `extraHeaders` (for `X-Session-Id` / `X-Noukai-Replay`),
- * and adding a hardened allowlist here means a misconfigured `traceScope` cannot
+ * and adding a hardened allowlist here means a misconfigured `replayScope` cannot
  * exfiltrate or rotate the bearer token by accident.
  *
  * Compared case-insensitively. The `Set` stores lower-case canonical forms.
@@ -347,7 +347,7 @@ export class Transport {
   /**
    * Emit a log event via the configured `onLog` hook.
    *
-   * Exposed for `traceScope` to emit `scope_open` / `scope_close` events.
+   * Exposed for `replayScope` to emit `scope_open` / `scope_close` events.
    * No-op when no `onLog` hook is configured.
    */
   public _emitLog(event: LogEvent): void {

@@ -6,7 +6,7 @@ export interface ExecuteResult {
   executionId?: string;
   /**
    * Session id this execution was tagged with (capture mode) or replayed from
-   * (replay mode). Undefined when called outside a trace scope.
+   * (replay mode). Undefined when called outside a replay scope.
    *
    * Set by the SDK after parsing — not present on the wire response.
    */
@@ -27,7 +27,7 @@ export interface PausedResult {
   blockCount: number;
   /**
    * Session id this execution was tagged with (capture mode) or replayed from
-   * (replay mode). Undefined when called outside a trace scope.
+   * (replay mode). Undefined when called outside a replay scope.
    *
    * Set by the SDK after parsing — not present on the wire response.
    */
@@ -45,7 +45,7 @@ export interface JobAccepted {
   blockCount: number;
   /**
    * Session id this async job was submitted with. Undefined when submitted
-   * outside a trace scope.
+   * outside a replay scope.
    *
    * Set by the SDK after parsing — not present on the wire response.
    */

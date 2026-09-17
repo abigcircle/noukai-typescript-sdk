@@ -1,8 +1,8 @@
 /**
- * Next.js App Router higher-order function adapter for the Noukai trace feature.
+ * Next.js App Router higher-order function adapter for the Noukai replay feature.
  *
  * Wraps a route handler function to read `X-Noukai-Replay` from the incoming
- * request, open a `traceScope` around the handler, and write `X-Noukai-Session`
+ * request, open a `replayScope` around the handler, and write `X-Noukai-Session`
  * on the returned Response in capture mode.
  *
  * Usage:
@@ -22,7 +22,7 @@
  * same HOF pattern on `(req, res)` handlers.
  *
  * **Capture sid after scope runs (§ 8.5):** The session id is generated inside
- * `traceScope` before the handler body runs. We read it with `currentSessionId()`
+ * `replayScope` before the handler body runs. We read it with `currentSessionId()`
  * from inside the scope body (so AsyncLocalStorage is still active), capture it
  * in a closure variable, and then apply it to the returned Response after the
  * handler completes.
@@ -45,7 +45,7 @@ import {
   ReplaySessionExpiredError,
   ReplaySessionNotFoundError,
 } from "../errors.js";
-import { traceScope, currentSessionId } from "../replay/scope.js";
+import { replayScope, currentSessionId } from "../replay/scope.js";
 import type { RelayReject } from "./relay.js";
 import {
   authRejectionResponse,
@@ -74,7 +74,7 @@ interface MinimalRequest {
 
 /**
  * Higher-order function: wraps a Next.js App Router route handler with Noukai
- * trace scope. Returns a new async handler with the same signature (plus a
+ * replay scope. Returns a new async handler with the same signature (plus a
  * union with `Response` for error cases).
  *
  * @param handler - The route handler to wrap.
@@ -95,7 +95,7 @@ export function withNoukaiTrace<TReq extends MinimalRequest>(
 
     let result: Response;
     try {
-      result = await traceScope(
+      result = await replayScope(
         async () => {
           // Read the session id from inside the scope while AsyncLocalStorage
           // is still active, then run the handler.

@@ -1,7 +1,7 @@
 /**
  * Replay session fetcher — Phase 6 implementation.
  *
- * This module is dynamically imported by traceScope() only when REPLAY mode
+ * This module is dynamically imported by replayScope() only when REPLAY mode
  * is active (NOUKAI_REPLAY_ENABLED=true + replaySessionId set). Phase 4 creates
  * the stub; Phase 6 fills the body.
  */
