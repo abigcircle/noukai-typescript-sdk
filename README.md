@@ -622,6 +622,44 @@ const noukai = new Noukai({
 
 The hook fires on every request, response, and retry attempt. `requestBody` and `responseBody` are omitted unless `logPayloads: true`.
 
+## OpenTelemetry (opt-in)
+
+The SDK can emit an [OpenTelemetry](https://opentelemetry.io/) span for each flow call into **your own** OTel backend (Datadog, Honeycomb, Jaeger, any OTLP collector) — so a Noukai call shows up on your traces next to your DB queries and HTTP calls. It is **off by default** and a true no-op when off (the SDK never imports OpenTelemetry unless you opt in).
+
+`@opentelemetry/api` is an optional peer dependency — install it and turn it on with `otel: true`:
+
+```bash
+npm install @opentelemetry/api
+```
+
+```typescript
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { Noukai } from "@noukai/sdk";
+
+// 1. Configure your OTel provider/exporter once, at app startup (your choice of backend).
+const provider = new NodeTracerProvider({
+  spanProcessors: [new BatchSpanProcessor(new OTLPTraceExporter())],
+});
+provider.register();
+
+// 2. Opt the client in. Spans flow into the provider you registered above.
+const noukai = new Noukai({ apiKey: "nk_...", org: "acme", project: "spelling", otel: true });
+await noukai.flow("grade-3").execute({ message: "hello" }); // → span "noukai.flow.execute"
+```
+
+Each `execute()` / `executeAsync()` call produces one span of kind `CLIENT`:
+
+| Span name | `noukai.flow.execute` · `noukai.flow.execute_async` |
+|---|---|
+| Attributes | `noukai.org`, `noukai.project`, `noukai.flow.slug`, `noukai.flow.version`, `noukai.execution_id`, `noukai.flow.status` |
+| On error | records the exception and sets the span status to `ERROR` (the exception still propagates) |
+
+Pass your own tracer instead of the global provider with `new Noukai({ ..., otel: true, tracer: myTracer })`. Because ESM resolves the optional dependency lazily, a missing `@opentelemetry/api` surfaces as a clear error on the first traced call.
+
+> Per-step child spans (synthesized from `run.trace()`) and W3C `traceparent` propagation are planned follow-ups; `steps()` / `events()` streaming calls are not yet span-wrapped. Today's scope is the parent span on `execute` / `executeAsync`.
+
 ## Resource management
 
 The client holds an HTTP connection pool. Release it explicitly when you're done:

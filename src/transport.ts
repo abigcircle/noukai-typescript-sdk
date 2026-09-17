@@ -18,6 +18,7 @@ import {
 } from "./errors.js";
 import type { NoukaiError } from "./errors.js";
 import { detectRuntime, runtimeVersion } from "./internal/runtime.js";
+import { NoopSpanFactory, type SpanFactory } from "./otel.js";
 
 // ---------------------------------------------------------------------------
 // Public interface types
@@ -279,6 +280,8 @@ export class Transport {
    * and the AsyncLocalStorage contextvar scope.
    */
   public readonly defaultSessionId: string | undefined;
+  /** OTel span factory; a no-op unless the client opted in with `otel: true`. */
+  public readonly spanFactory: SpanFactory;
   private readonly timeout: number;
   private readonly maxRetries: number;
   private readonly onLog?: ((event: LogEvent) => void) | undefined;
@@ -296,6 +299,7 @@ export class Transport {
     logPayloads: boolean;
     clientSignal?: AbortSignal | undefined;
     defaultSessionId?: string | undefined;
+    spanFactory?: SpanFactory | undefined;
   }) {
     this.apiKey = options.apiKey;
     this.baseUrl = options.baseUrl.replace(/\/+$/, ""); // strip trailing slashes
@@ -305,6 +309,7 @@ export class Transport {
     this.logPayloads = options.logPayloads;
     this.clientSignal = options.clientSignal;
     this.defaultSessionId = options.defaultSessionId;
+    this.spanFactory = options.spanFactory ?? new NoopSpanFactory();
 
     this._headers = new Headers();
     this._headers.set("Authorization", `Bearer ${this.apiKey}`);
