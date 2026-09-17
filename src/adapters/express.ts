@@ -50,6 +50,7 @@ import { replayScope, currentSessionId } from "../replay/scope.js";
 import {
   authRejectionResponse,
   boundAndParseBody,
+  extractTraceHeaders,
   forwardToFlow,
   resolveBounds,
   type FlowRelayConfig,
@@ -314,9 +315,16 @@ export function noukaiRelayHandler(
       res.status(rej.status).json({ detail: rej.detail });
       return;
     }
+    // Forward the browser's W3C trace context so an OTel-instrumented caller's
+    // trace continues to Noukai. Express lower-cases header names; a duplicated
+    // header arrives as an array — take the first.
+    const traceHeaders = extractTraceHeaders((name) => {
+      const v = req.headers[name];
+      return Array.isArray(v) ? v[0] : v;
+    });
     let outcome;
     try {
-      outcome = await forwardToFlow(config, parsed.payload);
+      outcome = await forwardToFlow(config, parsed.payload, traceHeaders);
     } catch (e) {
       // No upstream status to relay (connection/timeout) — signal 502 rather
       // than leaving the promise to reject unhandled (Express ignores it).

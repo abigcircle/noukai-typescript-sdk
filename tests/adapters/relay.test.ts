@@ -380,3 +380,101 @@ describe("createRelayRoute (nextjs)", () => {
     expect(await resp.json()).toEqual({ detail: "UPSTREAM_UNAVAILABLE" });
   });
 });
+
+// ---------------------------------------------------------------------------
+// W3C trace-context forwarding (design 20260917-SDK-agent-otel, PR-2)
+// ---------------------------------------------------------------------------
+
+/** Build an Express req that carries the given (lower-cased) headers. */
+function makeExpressReqWith(
+  raw: string,
+  headers: Record<string, string | string[]>,
+): RelayExpressRequest {
+  return {
+    headers,
+    async *[Symbol.asyncIterator]() {
+      yield new TextEncoder().encode(raw);
+    },
+  };
+}
+
+describe("relay trace-context forwarding", () => {
+  const TRACEPARENT = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+
+  it("express forwards incoming traceparent/tracestate onto the /execute call", async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(COMPLETED_BODY), { status: 200 }));
+    const handler = noukaiRelayHandler({
+      client: makeClient(),
+      org: "acme",
+      project: "spelling",
+      slug: "grade-3",
+      authorize: allow,
+    });
+    const res = makeExpressRes();
+    await handler(
+      makeExpressReqWith(JSON.stringify({ message: "hi" }), {
+        traceparent: TRACEPARENT,
+        tracestate: "vendor=abc",
+      }),
+      res,
+    );
+
+    const [, init] = fetchSpy.mock.calls[0]!;
+    expect(headersOf(init).traceparent).toBe(TRACEPARENT);
+    expect(headersOf(init).tracestate).toBe("vendor=abc");
+    // Bearer is still transport-managed (not overwritten by the extra headers).
+    expect(headersOf(init).authorization).toBe("Bearer nk_test");
+  });
+
+  it("express takes the first value of a duplicated traceparent header", async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(COMPLETED_BODY), { status: 200 }));
+    const handler = noukaiRelayHandler({
+      client: makeClient(),
+      org: "acme",
+      project: "spelling",
+      slug: "grade-3",
+      authorize: allow,
+    });
+    const res = makeExpressRes();
+    await handler(
+      makeExpressReqWith(JSON.stringify({ message: "hi" }), {
+        traceparent: [TRACEPARENT, "00-second-trace-should-be-ignored-01"],
+      }),
+      res,
+    );
+    expect(headersOf(fetchSpy.mock.calls[0]![1]).traceparent).toBe(TRACEPARENT);
+  });
+
+  it("does not add a traceparent when the request has none", async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(COMPLETED_BODY), { status: 200 }));
+    const handler = noukaiRelayHandler({
+      client: makeClient(),
+      org: "acme",
+      project: "spelling",
+      slug: "grade-3",
+      authorize: allow,
+    });
+    const res = makeExpressRes();
+    await handler(makeExpressReqWith(JSON.stringify({ message: "hi" }), {}), res);
+    expect(headersOf(fetchSpy.mock.calls[0]![1]).traceparent).toBeUndefined();
+  });
+
+  it("nextjs forwards incoming traceparent onto the /execute call", async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify(COMPLETED_BODY), { status: 200 }));
+    const route = createRelayRoute({
+      client: makeClient(),
+      org: "acme",
+      project: "spelling",
+      slug: "grade-3",
+      authorize: allow,
+    });
+    await route(
+      new Request("https://bff.example.com/agent/execute", {
+        method: "POST",
+        body: JSON.stringify({ message: "hi" }),
+        headers: { traceparent: TRACEPARENT },
+      }),
+    );
+    expect(headersOf(fetchSpy.mock.calls[0]![1]).traceparent).toBe(TRACEPARENT);
+  });
+});

@@ -50,6 +50,7 @@ import type { RelayReject } from "./relay.js";
 import {
   authRejectionResponse,
   boundAndParseBody,
+  extractTraceHeaders,
   forwardToFlow,
   resolveBounds,
   type FlowRelayConfig,
@@ -295,8 +296,11 @@ export function createRelayRoute(
       const rej = authRejectionResponse(e);
       return relayJson({ detail: rej.detail }, rej.status);
     }
+    // Forward the browser's W3C trace context so an OTel-instrumented caller's
+    // trace continues to Noukai. `Headers.get` is case-insensitive.
+    const traceHeaders = extractTraceHeaders((name) => req.headers.get(name) ?? undefined);
     try {
-      const outcome = await forwardToFlow(config, parsed.payload);
+      const outcome = await forwardToFlow(config, parsed.payload, traceHeaders);
       return relayJson(outcome.body, outcome.status);
     } catch (e) {
       // No upstream status to relay (connection/timeout) — signal 502.

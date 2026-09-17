@@ -67,6 +67,33 @@ export interface RelayReject {
   detail: string;
 }
 
+/**
+ * W3C trace-context headers a relay forwards so a browser-initiated distributed
+ * trace continues onto the relay→Noukai hop. Lower-case canonical forms (HTTP
+ * header names are case-insensitive). The browser agent SDK (`@noukai/agent`,
+ * `otel: true`) injects `traceparent` on its POST; forwarding it here lets the
+ * customer's trace span browser → relay → Noukai ingress in one tree.
+ */
+export const TRACE_CONTEXT_HEADERS = ["traceparent", "tracestate"] as const;
+
+/**
+ * Pull the W3C trace-context headers out of an incoming request via a
+ * `getHeader(name)` accessor (name is lower-case), returning only those present
+ * and non-empty. Framework-agnostic so both the Express and Next.js handlers
+ * share one extraction rule. These are the ONLY inbound headers a relay forwards
+ * — everything else about the request stays opaque to the relay.
+ */
+export function extractTraceHeaders(
+  getHeader: (name: string) => string | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of TRACE_CONTEXT_HEADERS) {
+    const v = getHeader(name);
+    if (v !== undefined && v !== "") out[name] = v;
+  }
+  return out;
+}
+
 export function resolveBounds(bounds?: RelayBounds): Required<RelayBounds> {
   return {
     maxBodyBytes: bounds?.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES,
@@ -142,6 +169,7 @@ export function boundAndParseBody(
 export async function forwardToFlow(
   config: FlowRelayConfig,
   payload: Record<string, unknown>,
+  traceHeaders?: Record<string, string>,
 ): Promise<RelayOutcome> {
   const seg = normalizeRelayVersion(config.version);
   const url = flowExecutePath(config.org, config.project, config.slug, seg);
@@ -152,6 +180,12 @@ export async function forwardToFlow(
     // a transient upstream 5xx (parity with the Python relay). Relay the first
     // upstream status verbatim.
     idempotent: false,
+    // Forward W3C trace context (only) so a browser-initiated trace continues to
+    // Noukai. `traceparent`/`tracestate` are not reserved headers, so they pass
+    // `applyExtraHeaders`; the bearer/version/request-id remain transport-managed.
+    ...(traceHeaders !== undefined && Object.keys(traceHeaders).length > 0
+      ? { extraHeaders: traceHeaders }
+      : {}),
   });
   // NOTE (design item F5, deferred — needs backend): the upstream body is
   // relayed verbatim, so raw execution-state (`executionId`, `pausedAtStep`,
