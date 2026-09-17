@@ -139,6 +139,21 @@ export class Flow {
       );
     }
 
+    // Opt-in OTel parent CLIENT span (a no-op unless the client set otel:true).
+    // executionId/status are read off the resolved result, so every return path
+    // (replay, paused, auto-resumed, normal) is covered.
+    return this.__transport.spanFactory.flowSpan(
+      "execute",
+      { org: this.org, project: this.project, slug: this.slug, version: String(version) },
+      () => this.executeImpl(options, version),
+    );
+  }
+
+  /** @internal Body of {@link execute}, wrapped by the opt-in OTel span. */
+  private async executeImpl(
+    options: ExecuteOptions,
+    version: VersionSpec,
+  ): Promise<ExecuteResult | PausedResult> {
     // --- Phase 4: scope + session-id precedence ---
     const { currentScope } = await import("./replay/scope.js");
     const { ScopeMode } = await import("./replay/state.js");
@@ -264,6 +279,16 @@ export class Flow {
       );
     }
 
+    // Opt-in OTel parent CLIENT span (a no-op unless the client set otel:true).
+    return this.__transport.spanFactory.flowSpan(
+      "execute_async",
+      { org: this.org, project: this.project, slug: this.slug, version: String(version) },
+      () => this.executeAsyncImpl(options, version),
+    );
+  }
+
+  /** @internal Body of {@link executeAsync}, wrapped by the opt-in OTel span. */
+  private async executeAsyncImpl(options: ExecuteAsyncOptions, version: VersionSpec): Promise<Job> {
     // --- Phase 4: scope + session-id precedence ---
     const { currentScope } = await import("./replay/scope.js");
     const { ScopeMode: ScopeModeAsync } = await import("./replay/state.js");

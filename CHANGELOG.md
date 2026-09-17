@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0] — 2026-09-16
 
+### Added
+
+- **Opt-in customer-side OpenTelemetry** (design `20260916-SDK-otel-and-replay-rename`).
+  `new Noukai({ otel: true })` emits one span of kind `CLIENT` per `flow.execute()` /
+  `flow.executeAsync()` call into the caller's own configured OpenTelemetry
+  provider — `noukai.flow.execute` / `noukai.flow.execute_async`, with
+  `noukai.org`/`project`/`flow.slug`/`flow.version`/`execution_id`/`flow.status`
+  attributes, `ERROR` status + recorded exception on failure. Off by default and
+  a **true no-op** when off (the SDK never imports `@opentelemetry/api` unless
+  opted in). `@opentelemetry/api` is a new optional `peerDependency`; because ESM
+  resolves it lazily, a missing dependency surfaces on the first traced call.
+  Pass a custom tracer with `tracer:` to override the global provider. Per-step
+  child spans, `traceparent` propagation, and `steps()`/`events()` streaming
+  spans are deferred follow-ups.
+
 ### Changed
 
 - **BREAKING — the replay/capture scope is renamed `trace*` → `replay*`**

@@ -10,6 +10,7 @@ import {
   ENV_ENV_VAR,
 } from "./constants.js";
 import { AuthenticationError } from "./errors.js";
+import { makeSpanFactory } from "./otel.js";
 
 /** Deployment environment shortcut for the base URL. */
 export type NoukaiEnv = "dev" | "production";
@@ -46,6 +47,16 @@ export interface NoukaiOptions {
    * Precedence: per-call `sessionId` option > this default > AsyncLocalStorage scope.
    */
   sessionId?: string; // NEW — Phase 2
+  /**
+   * Opt into customer-side OpenTelemetry. When `true`, each `flow.execute` /
+   * `flow.executeAsync` call emits one span of kind CLIENT into your configured
+   * OpenTelemetry provider. Requires the `@opentelemetry/api` optional peer
+   * dependency. Default `false` — a true no-op that never imports OpenTelemetry.
+   * (design 20260916-SDK-otel-and-replay-rename)
+   */
+  otel?: boolean;
+  /** Explicit OpenTelemetry `Tracer` to use instead of the global provider. */
+  tracer?: unknown;
   /** AbortSignal for full-client cancellation (cancels all in-flight requests). */
   signal?: AbortSignal;
 }
@@ -183,6 +194,7 @@ export class Noukai {
       onLog: options.onLog,
       logPayloads: options.logPayloads ?? false,
       clientSignal: options.signal,
+      spanFactory: makeSpanFactory(options.otel ?? false, options.tracer),
       ...(options.sessionId !== undefined ? { defaultSessionId: options.sessionId } : {}),
     });
 
