@@ -2,6 +2,7 @@ import type { ExecuteResult, PausedResult, JobAccepted } from "./types/responses
 import type { ChatMessage, ExecuteRequest } from "./types/requests.js";
 import type { StepCompleted, StreamEvent } from "./types/events.js";
 import type { Transport } from "./transport.js";
+import type { FlowSpan } from "./otel.js";
 import { Run } from "./run.js";
 import { Job } from "./job.js";
 import {
@@ -103,13 +104,51 @@ export class Flow {
    * @internal Exposed for tool-calls.ts and step-iterator.ts resume logic.
    * Not part of the public API — do not use in application code.
    *
-   * Returns the `VersionSegment` form expected by helpers in `paths.ts`.
-   * Coerces the public `VersionSpec` ("draft" | "production" | number) into
-   * the wire-level shape (`"draft" | number`); `"production"` should be
-   * rejected at the call site before reaching this method.
+   * Coerces the public `VersionSpec` ("draft" | "production" | number) into the
+   * wire-level `VersionSegment` (`"production" | number`) that the `paths.ts`
+   * helpers render into a URL. The server routes versions by path:
+   *   - `"production"` → base path (production; draft/live fallback if unpublished)
+   *   - `"draft"`      → `0`  (→ `/v0`, the reserved draft alias)
+   *   - `<int>` (≥0)   → that integer (→ `/vN`)
+   * See design 20260917-SDK-version-production-routing.
    */
-  public _pathVersion(version: VersionSpec): "draft" | number {
-    return typeof version === "number" ? version : "draft";
+  public _pathVersion(version: VersionSpec): "production" | number {
+    if (typeof version === "number") {
+      if (!Number.isInteger(version) || version < 0) {
+        throw new Error(
+          `Invalid version: ${String(version)}. Pass a non-negative integer ` +
+            `(0 = draft, N = published version), "draft", or "production".`,
+        );
+      }
+      return version;
+    }
+    // Widen to `string` so the runtime guard below still protects untyped (JS)
+    // callers who pass an unrecognised string, without tripping the type
+    // narrowing lint (comparison-always-true).
+    const v: string = version;
+    if (v === "draft") return 0;
+    if (v === "production") return "production";
+    throw new Error(
+      `Invalid version: ${JSON.stringify(version)}. ` +
+        `Expected "draft", "production", or a non-negative integer.`,
+    );
+  }
+
+  /**
+   * @internal Reject the draft version for the step-through (SSE) endpoints.
+   * The server returns `400 INVALID_VERSION` for `/v0/step` — draft is not
+   * supported for step-through — so we fail fast with a clear message instead
+   * of a confusing round-trip. `"draft"` and the equivalent integer `0` both
+   * map to the `/v0` segment.
+   */
+  private assertStreamableVersion(version: VersionSpec): void {
+    if (this._pathVersion(version) === 0) {
+      throw new Error(
+        "steps()/events() cannot run the draft version: the server does not " +
+          "support step-through on draft (v0). Publish a version and pass " +
+          "version: <N>, or use the default 'production'.",
+      );
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -119,25 +158,17 @@ export class Flow {
   /**
    * Synchronous in-process flow execution.
    *
-   * @param options.version - Version to execute. Omit (or pass `"draft"`) for
-   *   the draft version. Pass an integer to pin to a specific published version.
-   *   `"production"` will be supported in a future release once the server-side
-   *   body-field routing is deployed — for now it raises an error.
+   * @param options.version - Version to execute. Omit (or pass `"production"`)
+   *   to run the flow's production version (the server falls back to the live
+   *   draft when the flow has no published version). Pass `"draft"` to force the
+   *   live working copy, or an integer to pin to a specific published version.
    */
   async execute(options: ExecuteOptions = {}): Promise<ExecuteResult | PausedResult> {
-    const version = options.version ?? "draft";
+    const version = options.version ?? "production";
 
     // Client-side validation of the server's fresh-call contract (F6).
     validateFreshCall(options.message, options.messages);
     checkMessagesPayloadSize(options.messages);
-
-    if (version === "production") {
-      throw new Error(
-        "Flow.execute({version: 'production'}) is not yet supported. " +
-        "Pin to an integer version (e.g. version: 3) or use the default 'draft'. " +
-        "See https://github.com/noukai/noukai-node/issues/... for the server-side tracker.",
-      );
-    }
 
     // Opt-in OTel parent CLIENT span (a no-op unless the client set otel:true).
     // executionId/status are read off the resolved result, so every return path
@@ -145,7 +176,11 @@ export class Flow {
     return this.__transport.spanFactory.flowSpan(
       "execute",
       { org: this.org, project: this.project, slug: this.slug, version: String(version) },
-      () => this.executeImpl(options, version),
+      async (span) => {
+        const result = await this.executeImpl(options, version);
+        await this.tagFlowSpan(span, result);
+        return result;
+      },
     );
   }
 
@@ -264,26 +299,22 @@ export class Flow {
   /**
    * Submit async (queue-backed) execution. Returns a Job handle.
    *
-   * @param options.version - Version to execute. Omit (or pass `"draft"`) for
-   *   the draft version. Pass an integer to pin to a specific published version.
-   *   `"production"` will be supported in a future release.
+   * @param options.version - Version to execute. Omit (or pass `"production"`)
+   *   to run the flow's production version. Pass `"draft"` to force the live
+   *   working copy, or an integer to pin to a specific published version.
    */
   async executeAsync(options: ExecuteAsyncOptions = {}): Promise<Job> {
-    const version = options.version ?? "draft";
-
-    if (version === "production") {
-      throw new Error(
-        "Flow.executeAsync({version: 'production'}) is not yet supported. " +
-        "Pin to an integer version (e.g. version: 3) or use the default 'draft'. " +
-        "See https://github.com/noukai/noukai-node/issues/... for the server-side tracker.",
-      );
-    }
+    const version = options.version ?? "production";
 
     // Opt-in OTel parent CLIENT span (a no-op unless the client set otel:true).
     return this.__transport.spanFactory.flowSpan(
       "execute_async",
       { org: this.org, project: this.project, slug: this.slug, version: String(version) },
-      () => this.executeAsyncImpl(options, version),
+      async (span) => {
+        const result = await this.executeAsyncImpl(options, version);
+        await this.tagFlowSpan(span, result);
+        return result;
+      },
     );
   }
 
@@ -359,8 +390,12 @@ export class Flow {
    * — use `events()` if you want the full stream.
    *
    * Note: `steps()` does NOT accept `runRemaining` (that's `events()` only).
+   *
+   * Defaults to the production version. `version:"draft"` (or `version:0`) is
+   * rejected — the server does not support step-through on draft.
    */
   steps(options: StepsOptions = {}): AsyncIterable<StepCompleted> {
+    this.assertStreamableVersion(options.version ?? "production");
     return makeStepsIterator(this, options) as AsyncIterable<StepCompleted>;
   }
 
@@ -375,14 +410,43 @@ export class Flow {
    *
    * Set `runRemaining: true` to ask the server to execute all remaining
    * steps in a single SSE stream rather than pausing between steps.
+   *
+   * Defaults to the production version. `version:"draft"` (or `version:0`) is
+   * rejected — the server does not support step-through on draft.
    */
   events(options: EventsOptions = {}): AsyncIterable<StreamEvent> {
+    this.assertStreamableVersion(options.version ?? "production");
     return makeEventsIterator(this, options);
   }
 
   // ---------------------------------------------------------------------------
   // Phase 7 — not yet implemented
   // ---------------------------------------------------------------------------
+
+  /**
+   * @internal Tag the call span from the result, and — when `otelSteps` is on
+   * and the run completed — fetch its trace and emit one child span per block.
+   * The trace fetch is best-effort: a failure must never break the user's call.
+   */
+  private async tagFlowSpan(span: FlowSpan, result: unknown): Promise<void> {
+    const rec = (result ?? {}) as Record<string, unknown>;
+    const executionId = typeof rec.executionId === "string" ? rec.executionId : undefined;
+    const status = typeof rec.status === "string" ? rec.status : undefined;
+    span.setExecutionId(executionId);
+    span.setStatus(status);
+    if (
+      this.__transport.spanFactory.stepSpansEnabled &&
+      executionId !== undefined &&
+      (status === "completed" || status === "failed")
+    ) {
+      try {
+        const trace = await this.run(executionId).trace();
+        span.emitStepSpans(trace.steps);
+      } catch {
+        // best-effort — a trace-fetch failure must never break the call
+      }
+    }
+  }
 
   /** Build a Run proxy for trace operations on a known executionId. */
   run(executionId: string): Run {

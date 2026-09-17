@@ -193,8 +193,8 @@ export interface NoukaiRelayHandlerOptions {
   authorize: (req: RelayExpressRequest) => void | Promise<void>;
   /** Abuse bounds (default 256 KiB / 40). */
   bounds?: RelayBounds;
-  /** `"draft"` (default) or a published integer version. */
-  version?: "draft" | number;
+  /** `"production"` (default), `"draft"`, or a published integer version. */
+  version?: "draft" | "production" | number;
 }
 
 /**

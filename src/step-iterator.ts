@@ -100,7 +100,7 @@ export class EventIterator implements AsyncIterable<StreamEvent>, AsyncIterator<
           extraHeaders[HEADER_SESSION_ID] = effectiveSid;
         }
 
-        const version = this.opts.version ?? "draft";
+        const version = this.opts.version ?? "production";
         const url = flowStepPath(
           this.flow.org,
           this.flow.project,

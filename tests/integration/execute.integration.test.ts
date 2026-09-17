@@ -40,6 +40,23 @@ describe.skipIf(!integrationReady)("execute (integration)", () => {
   );
 
   it(
+    "exposes the flow output on a completed result",
+    async () => {
+      const result = await helloFlow(client).execute({ message: "hello" });
+
+      expect(result.status).toBe("completed");
+      expect(result.requiresToolCalls).toBe(false);
+      const completed = result as ExecuteResult;
+
+      // The output must be present (not undefined/null) for a completed
+      // hello-world run — the fixture must produce a non-empty result.
+      expect(completed.result).toBeDefined();
+      expect(completed.result).not.toBeNull();
+    },
+    60_000,
+  );
+
+  it(
     "forwards parameters to the flow's first block",
     async () => {
       const result = await helloFlow(client).execute({

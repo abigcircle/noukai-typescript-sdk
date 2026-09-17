@@ -122,7 +122,7 @@ export interface FlowInternal {
   org: string;
   project: string;
   slug: string;
-  _pathVersion(v: VersionSpec): "draft" | number;
+  _pathVersion(v: VersionSpec): "production" | number;
 }
 
 /** The one step the loop routes through: send a payload, get back `(status, body)`. */

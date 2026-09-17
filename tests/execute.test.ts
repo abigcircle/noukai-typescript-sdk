@@ -13,14 +13,32 @@ describe("execute URL routing", () => {
   });
   afterEach(() => { process.env = originalEnv; });
 
-  it("draft → unversioned URL", async () => {
+  it("default (production) → unversioned URL", async () => {
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({
       status: "completed", flowId: "f", blockCount: 1, result: {},
     }), { status: 200 }));
+    // Omitting version defaults to "production", which the server routes to the
+    // production version via the base (unversioned) path. Behavior-preserving.
     await new Noukai({ apiKey: "nk_x" }).flow("acme/spelling/grade-3").execute({ message: "hi" });
     const url = fetchSpy.mock.calls[0]?.[0] as string;
     // The full URL must include /api/v1/ prefix and end at /execute with no version segment.
     expect(url).toMatch(/\/api\/v1\/seq\/acme\/spelling\/grade-3\/execute$/);
+  });
+
+  it("explicit production → unversioned URL", async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({
+      status: "completed", flowId: "f", blockCount: 1, result: {},
+    }), { status: 200 }));
+    await new Noukai({ apiKey: "nk_x" }).flow("a/b/c").execute({ message: "hi", version: "production" });
+    expect(fetchSpy.mock.calls[0]?.[0]).toMatch(/\/seq\/a\/b\/c\/execute$/);
+  });
+
+  it("draft → /v0/execute URL (reserved draft alias)", async () => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({
+      status: "completed", flowId: "f", blockCount: 1, result: {},
+    }), { status: 200 }));
+    await new Noukai({ apiKey: "nk_x" }).flow("a/b/c").execute({ message: "hi", version: "draft" });
+    expect(fetchSpy.mock.calls[0]?.[0]).toMatch(/\/v0\/execute$/);
   });
 
   it("full URL includes /api/v1/ path — regression guard", async () => {

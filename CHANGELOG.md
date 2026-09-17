@@ -6,6 +6,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-09-17
+
+### Changed
+
+- **`version` now maps to the server's real path-based version routing** (design
+  `20260917-SDK-version-production-routing`). The SDK previously assumed the
+  base path meant "draft" and that `version:"production"` required unshipped
+  "body-field routing." Neither was true — the server routes by URL path:
+  base = **production**, `/v0` = **draft**, `/vN` = version N. The mapping is now:
+  - `version:"production"` → base path (production; the server falls back to the
+    live draft when the flow has no published version).
+  - `version:"draft"` → `/v0` (the live working copy).
+  - `version:<N>` → `/vN` (published version N).
+  - **The default when `version` is omitted is now `"production"`** (was
+    `"draft"`). This is **behavior-preserving**: every prior call already sent the
+    base path, which the server has always resolved to production. Only the
+    *name* of the default changed.
+  - `version:"draft"` (and the equivalent `version:0`) is **rejected by
+    `steps()`/`events()`** with a clear error — the server does not support
+    step-through on draft (`/v0/step` returns 400).
+  - A negative or non-integer `version` now throws a clear client-side error.
+  - ⚠️ **Migration:** if you explicitly passed `version:"draft"`, you were
+    previously reaching the base path (production); it now runs the actual draft
+    (`/v0`). Pass `version:"production"` (or omit `version`) to keep production.
+
+### Fixed
+
+- **`version:"production"` no longer throws.** It previously raised a "not yet
+  supported" error; it now executes against the production version.
+- **There is now a way to reach the actual draft — pass `version:"draft"` (`/v0`).**
+  Previously `"draft"` mapped to the base path, which the server resolves to
+  production, so there was no way to run the live working copy at all.
+
+### Removed
+
+- Dead `ExecuteRequest.version` request-body field (the server has no such
+  field; versions are routed by URL path).
+
 ## [0.5.0] — 2026-09-16
 
 ### Added
@@ -19,9 +57,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a **true no-op** when off (the SDK never imports `@opentelemetry/api` unless
   opted in). `@opentelemetry/api` is a new optional `peerDependency`; because ESM
   resolves it lazily, a missing dependency surfaces on the first traced call.
-  Pass a custom tracer with `tracer:` to override the global provider. Per-step
-  child spans, `traceparent` propagation, and `steps()`/`events()` streaming
-  spans are deferred follow-ups.
+  Pass a custom tracer with `tracer:` to override the global provider.
+- **Per-pipeline-block child spans** (opt-in). `new Noukai({ otelSteps: true })`
+  additionally fetches `run.trace()` after a completed `execute` and emits one
+  backdated child span per block, nested under the call span, carrying
+  `gen_ai.request.model`, `gen_ai.usage.input_tokens`/`output_tokens`,
+  `noukai.step.cost_usd`/`id`/`status`/`duration_ms`. `otelStepPayloads: true`
+  additionally attaches each block's **input data and output results** (plus the
+  error context for failed blocks) — size-bounded; off by default (may contain
+  PII). The trace fetch is best-effort, so a fetch failure never breaks the
+  call. `traceparent`
+  propagation and spans on the streaming `steps()`/`events()` calls remain
+  deferred follow-ups.
 
 ### Changed
 

@@ -186,8 +186,8 @@ export interface CreateRelayRouteOptions {
   authorize: (req: Request) => void | Promise<void>;
   /** Abuse bounds (default 256 KiB / 40). */
   bounds?: RelayBounds;
-  /** `"draft"` (default) or a published integer version. */
-  version?: "draft" | number;
+  /** `"production"` (default), `"draft"`, or a published integer version. */
+  version?: "draft" | "production" | number;
 }
 
 // Statuses that must not carry a response body — the Web `Response` constructor

@@ -122,7 +122,7 @@ const result = await noukai.flow("acme/spelling/grade-3").execute({
   blockOverrides: { "step-id": { temperature: 0.5 } },
   attachments: [{ url: "https://...", mimeType: "image/png" }],
   trace: false,                              // capture full I/O for trace
-  version: "draft",                          // or a published integer
+  version: "production",                     // default; or "draft" / a published integer
   timeout: 60_000,                           // override client default
   signal: controller.signal,                 // cancel this call only
 });
@@ -519,11 +519,14 @@ header in production cannot redirect a real request to a cassette.
 
 | `version`     | Behaviour                                                                 |
 | ------------- | ------------------------------------------------------------------------- |
-| `"draft"` *(default)* | Latest unpublished draft (what you see in the editor).            |
+| `"production"` *(default)* | The flow's published production version. Falls back to the live draft when the flow has no published version. |
+| `"draft"`     | The latest unpublished draft (what you see in the editor). Not supported by `steps()` / `events()`. |
 | `<integer>`   | A specific published version (e.g. `version: 3`).                         |
-| `"production"`| **Not yet supported** — throws at call site until the server contract lands. |
 
-Pin a version when calling from production code; use `"draft"` only in test and preview environments.
+`execute()` / `executeAsync()` accept all three. `steps()` / `events()` accept
+`"production"` or an integer only — the server does not support step-through on
+the draft. Use `"draft"` in test and preview environments; the default
+(`"production"`) is what you want from production code.
 
 ## Run traces
 
@@ -658,7 +661,27 @@ Each `execute()` / `executeAsync()` call produces one span of kind `CLIENT`:
 
 Pass your own tracer instead of the global provider with `new Noukai({ ..., otel: true, tracer: myTracer })`. Because ESM resolves the optional dependency lazily, a missing `@opentelemetry/api` surfaces as a clear error on the first traced call.
 
-> Per-step child spans (synthesized from `run.trace()`) and W3C `traceparent` propagation are planned follow-ups; `steps()` / `events()` streaming calls are not yet span-wrapped. Today's scope is the parent span on `execute` / `executeAsync`.
+### Per-block spans (`otelSteps`)
+
+For a full waterfall of each pipeline block, set `otelSteps: true`. After a completed `execute()` the SDK fetches `run.trace()` and emits one **backdated child span per block**, nested under the call span:
+
+```typescript
+const noukai = new Noukai({ apiKey: "nk_...", org: "acme", project: "spelling", otelSteps: true });
+await noukai.flow("grade-3").execute({ message: "hello" });
+// noukai.flow.execute
+//   ├─ noukai.flow.step   (block "extract")   gen_ai.request.model, gen_ai.usage.*, noukai.step.cost_usd, …
+//   └─ noukai.flow.step   (block "grade")     …
+```
+
+Each child carries `noukai.step.id` / `status` / `duration_ms` / `cost_usd`, `noukai.step.loop_index` (inside loops), and `gen_ai.request.model` + `gen_ai.usage.input_tokens` / `output_tokens`. To also capture each block's **input data and output results**, add `otelStepPayloads: true` — these are size-bounded and **off by default because they can contain PII**:
+
+```typescript
+new Noukai({ ..., otelSteps: true, otelStepPayloads: true }); // child spans also carry noukai.step.input / noukai.step.output
+```
+
+`otelSteps` adds one `run.trace()` GET per traced call; the trace fetch is best-effort, so a failure never breaks your call.
+
+> W3C `traceparent` propagation and spans on the streaming `steps()` / `events()` calls are planned follow-ups.
 
 ## Resource management
 

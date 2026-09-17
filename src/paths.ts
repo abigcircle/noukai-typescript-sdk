@@ -38,22 +38,26 @@ const UUID_RE =
 // Versioned flow base (org/project/slug, optionally pinned to /v{N})
 // ---------------------------------------------------------------------------
 
-export type VersionSegment = "draft" | number;
+export type VersionSegment = "production" | number;
 
 /**
  * Build the versioned base path for a flow.
  *
- * - `"draft"`  → `/seq/{org}/{project}/{slug}`
- * - `<int>`    → `/seq/{org}/{project}/{slug}/v{N}`
+ * The server routes versions by URL path (there is no body-field routing):
+ * - `"production"` → `/seq/{org}/{project}/{slug}`      (base path = production;
+ *   the server falls back to draft/live if the flow has no published version)
+ * - `0`            → `/seq/{org}/{project}/{slug}/v0`   (reserved draft alias)
+ * - `<int>` (≥1)   → `/seq/{org}/{project}/{slug}/v{N}` (published version N)
  *
- * `"production"` is intentionally unsupported here — callers must reject it
- * before reaching this helper (server-side body-field routing not deployed).
+ * Callers pass the wire segment produced by `Flow._pathVersion`, which coerces
+ * the public `VersionSpec` ("draft" | "production" | number) into this shape.
+ * See design 20260917-SDK-version-production-routing.
  */
 export function flowBase(
   org: string,
   project: string,
   slug: string,
-  version: VersionSegment = "draft",
+  version: VersionSegment = "production",
 ): string {
   const base = `${SEQ_PREFIX}/${org}/${project}/${slug}`;
   return typeof version === "number" ? `${base}/v${String(version)}` : base;
@@ -68,7 +72,7 @@ export function flowExecutePath(
   org: string,
   project: string,
   slug: string,
-  version: VersionSegment = "draft",
+  version: VersionSegment = "production",
 ): string {
   return `${flowBase(org, project, slug, version)}/execute`;
 }
@@ -78,7 +82,7 @@ export function flowStepPath(
   org: string,
   project: string,
   slug: string,
-  version: VersionSegment = "draft",
+  version: VersionSegment = "production",
 ): string {
   return `${flowBase(org, project, slug, version)}/step`;
 }
@@ -88,7 +92,7 @@ export function flowJobsSubmitPath(
   org: string,
   project: string,
   slug: string,
-  version: VersionSegment = "draft",
+  version: VersionSegment = "production",
 ): string {
   return `${flowBase(org, project, slug, version)}/jobs`;
 }

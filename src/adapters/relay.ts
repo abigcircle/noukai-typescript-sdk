@@ -48,8 +48,11 @@ export interface FlowRelayConfig {
   project: string;
   slug: string;
   bounds?: RelayBounds;
-  /** `"draft"` (default) or a published integer version. */
-  version?: "draft" | number;
+  /**
+   * `"production"` (default) runs the flow's production version; `"draft"` runs
+   * the live working copy; an integer pins a published version.
+   */
+  version?: "draft" | "production" | number;
 }
 
 /** The `(status, body)` a relay hands back — always JSON-serializable. */
@@ -71,21 +74,31 @@ export function resolveBounds(bounds?: RelayBounds): Required<RelayBounds> {
   };
 }
 
-function normalizeRelayVersion(version: "draft" | number | undefined): VersionSegment {
+function normalizeRelayVersion(
+  version: "draft" | "production" | number | undefined,
+): VersionSegment {
   if (typeof version === "number") {
-    if (!Number.isInteger(version)) {
-      throw new Error(`flow relay version must be "draft" or an integer, got ${String(version)}`);
+    if (!Number.isInteger(version) || version < 0) {
+      throw new Error(
+        `flow relay version must be "draft", "production", or a non-negative integer, got ${String(version)}`,
+      );
     }
     return version;
   }
-  // `"draft"` and `undefined` both resolve to the draft segment.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (version === "draft" || version === undefined) return "draft";
-  // A non-"draft" string (e.g. "production") must NOT silently coerce to draft
-  // and serve the wrong flow version — mirror the Python adapter, which raises.
-  // (Strict TS callers are guarded by the `"draft" | number` type; JS callers
-  // and `as any` are not.)
-  throw new Error(`flow relay version must be "draft" or an integer, got ${JSON.stringify(version)}`);
+  // `undefined` defaults to the base (production) segment.
+  if (version === undefined) return "production";
+  // Widen to `string` so the runtime guard still protects untyped (JS) callers
+  // who pass an unrecognised string, without tripping the type-narrowing lint.
+  const v: string = version;
+  // `"production"` → base path; `"draft"` → the reserved `/v0` alias (the relay
+  // forwards to /execute, which supports draft).
+  if (v === "production") return "production";
+  if (v === "draft") return 0;
+  // Any other string must NOT silently coerce and serve the wrong flow version —
+  // mirror the Python adapter, which raises.
+  throw new Error(
+    `flow relay version must be "draft", "production", or a non-negative integer, got ${JSON.stringify(version)}`,
+  );
 }
 
 /**
