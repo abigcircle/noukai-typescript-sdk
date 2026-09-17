@@ -2,6 +2,7 @@ import type { ExecuteResult, PausedResult, JobAccepted } from "./types/responses
 import type { ChatMessage, ExecuteRequest } from "./types/requests.js";
 import type { StepCompleted, StreamEvent } from "./types/events.js";
 import type { Transport } from "./transport.js";
+import type { FlowSpan } from "./otel.js";
 import { Run } from "./run.js";
 import { Job } from "./job.js";
 import {
@@ -145,7 +146,11 @@ export class Flow {
     return this.__transport.spanFactory.flowSpan(
       "execute",
       { org: this.org, project: this.project, slug: this.slug, version: String(version) },
-      () => this.executeImpl(options, version),
+      async (span) => {
+        const result = await this.executeImpl(options, version);
+        await this.tagFlowSpan(span, result);
+        return result;
+      },
     );
   }
 
@@ -283,7 +288,11 @@ export class Flow {
     return this.__transport.spanFactory.flowSpan(
       "execute_async",
       { org: this.org, project: this.project, slug: this.slug, version: String(version) },
-      () => this.executeAsyncImpl(options, version),
+      async (span) => {
+        const result = await this.executeAsyncImpl(options, version);
+        await this.tagFlowSpan(span, result);
+        return result;
+      },
     );
   }
 
@@ -383,6 +392,31 @@ export class Flow {
   // ---------------------------------------------------------------------------
   // Phase 7 — not yet implemented
   // ---------------------------------------------------------------------------
+
+  /**
+   * @internal Tag the call span from the result, and — when `otelSteps` is on
+   * and the run completed — fetch its trace and emit one child span per block.
+   * The trace fetch is best-effort: a failure must never break the user's call.
+   */
+  private async tagFlowSpan(span: FlowSpan, result: unknown): Promise<void> {
+    const rec = (result ?? {}) as Record<string, unknown>;
+    const executionId = typeof rec.executionId === "string" ? rec.executionId : undefined;
+    const status = typeof rec.status === "string" ? rec.status : undefined;
+    span.setExecutionId(executionId);
+    span.setStatus(status);
+    if (
+      this.__transport.spanFactory.stepSpansEnabled &&
+      executionId !== undefined &&
+      (status === "completed" || status === "failed")
+    ) {
+      try {
+        const trace = await this.run(executionId).trace();
+        span.emitStepSpans(trace.steps);
+      } catch {
+        // best-effort — a trace-fetch failure must never break the call
+      }
+    }
+  }
 
   /** Build a Run proxy for trace operations on a known executionId. */
   run(executionId: string): Run {

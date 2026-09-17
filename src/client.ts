@@ -57,6 +57,19 @@ export interface NoukaiOptions {
   otel?: boolean;
   /** Explicit OpenTelemetry `Tracer` to use instead of the global provider. */
   tracer?: unknown;
+  /**
+   * When `true` (implies `otel`), also fetch `run.trace()` after a completed
+   * `execute` and emit one child span per pipeline block — model, token usage,
+   * cost, duration, status — backdated and nested under the call span. Adds a
+   * `run.trace()` GET per traced call.
+   */
+  otelSteps?: boolean;
+  /**
+   * When `true` (implies `otelSteps`), each block child span also carries a
+   * size-bounded copy of the block's input data and output results. Off by
+   * default — this can contain PII.
+   */
+  otelStepPayloads?: boolean;
   /** AbortSignal for full-client cancellation (cancels all in-flight requests). */
   signal?: AbortSignal;
 }
@@ -194,7 +207,16 @@ export class Noukai {
       onLog: options.onLog,
       logPayloads: options.logPayloads ?? false,
       clientSignal: options.signal,
-      spanFactory: makeSpanFactory(options.otel ?? false, options.tracer),
+      spanFactory: makeSpanFactory(
+        (options.otel ?? false) ||
+          (options.otelSteps ?? false) ||
+          (options.otelStepPayloads ?? false),
+        options.tracer,
+        {
+          stepSpans: (options.otelSteps ?? false) || (options.otelStepPayloads ?? false),
+          stepPayloads: options.otelStepPayloads ?? false,
+        },
+      ),
       ...(options.sessionId !== undefined ? { defaultSessionId: options.sessionId } : {}),
     });
 
