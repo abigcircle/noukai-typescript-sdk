@@ -43,7 +43,7 @@ function replayEnvEnabled(): boolean {
   return v === "1" || v === "true" || v === "yes" || v === "on";
 }
 
-export interface TraceScopeOptions {
+export interface ReplayScopeOptions {
   /**
    * Replay session id; when set AND NOUKAI_REPLAY_ENABLED=true, opens REPLAY
    * scope. When unset (or env var is unset) opens a CAPTURE scope (or NORMAL
@@ -67,8 +67,8 @@ export interface TraceScopeOptions {
 }
 
 /**
- * Open a trace scope for the duration of `fn`. Async equivalent of the
- * `@noukai.trace` Python decorator + context manager.
+ * Open a replay scope for the duration of `fn`. Async equivalent of the
+ * `@noukai.replay` Python decorator + context manager.
  *
  * In REPLAY mode the session is pre-fetched before `fn` is called; throws
  * before `fn` runs if fetch fails.
@@ -85,9 +85,9 @@ export interface TraceScopeOptions {
  * @throws ReplayForbiddenError (403) / ReplaySessionNotFoundError (404)
  *   / ReplayInvalidSessionError (400) / ReplayNoSnapshotsError on session fetch.
  */
-export async function traceScope<T>(
+export async function replayScope<T>(
   fn: () => Promise<T> | T,
-  options: TraceScopeOptions = {},
+  options: ReplayScopeOptions = {},
 ): Promise<T> {
   let mode: ScopeModeValue;
   let sid: string | null;

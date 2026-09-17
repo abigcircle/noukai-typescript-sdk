@@ -367,7 +367,7 @@ implementation checklist — see [`docs/AGENT_RELAY.md`](docs/AGENT_RELAY.md).
 
 ## Replay & session grouping (experimental)
 
-`traceScope` groups every Noukai call in its body under one session id, so you
+`replayScope` groups every Noukai call in its body under one session id, so you
 can later replay the recorded behavior without re-hitting LLM providers.
 
 ### Capture
@@ -455,9 +455,9 @@ iterating on post-processing logic.
 > **Non-HTTP contexts.** For workers, CLI tools, tests, or scripts where there
 > is no inbound request to carry the header, open the scope programmatically:
 > ```typescript
-> import { traceScope } from "@noukai/sdk";
+> import { replayScope } from "@noukai/sdk";
 >
-> await traceScope(
+> await replayScope(
 >   async () => {
 >     const result = await noukai.flow("grade-3").execute({ message: "any input" });
 >     console.log(result.result);   // served from cassette
@@ -471,8 +471,8 @@ iterating on post-processing logic.
 
 | Scenario | Behavior |
 |---|---|
-| No `traceScope`, no `X-Noukai-Replay` | Normal live call, no session tagging. |
-| Inside `traceScope` (no replay header) | Capture mode — fresh `sessionId` generated, tagged on outbound `X-Session-Id`. |
+| No `replayScope`, no `X-Noukai-Replay` | Normal live call, no session tagging. |
+| Inside `replayScope` (no replay header) | Capture mode — fresh `sessionId` generated, tagged on outbound `X-Session-Id`. |
 | `X-Noukai-Replay` header present, `NOUKAI_REPLAY_ENABLED` unset | Capture mode — replay header silently ignored; live call still captured. |
 | `X-Noukai-Replay` present + `NOUKAI_REPLAY_ENABLED=true` | Replay mode — SDK fetches session, serves from cassette. |
 

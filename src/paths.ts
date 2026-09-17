@@ -27,7 +27,7 @@ const SEQ_PREFIX = "/seq";
 /**
  * Session IDs are server-generated UUIDs. Accepting any other shape would
  * let attacker-controlled values (e.g. from the `X-Noukai-Replay` header
- * read by trace middleware) inject `/`, `..`, or `?` into the URL path and
+ * read by replay middleware) inject `/`, `..`, or `?` into the URL path and
  * pivot the authenticated GET to a different endpoint under the same API
  * base.
  */
@@ -129,7 +129,7 @@ export function runPath(
  * The route is NOT scoped by org/project — auth is per-flow-run inside the
  * handler.
  *
- * `sessionId` is validated as a UUID before interpolation. Trace middleware
+ * `sessionId` is validated as a UUID before interpolation. Replay middleware
  * reads it from an attacker-controllable HTTP header; rejecting non-UUID
  * shapes here prevents path traversal into other authenticated endpoints.
  * The segment is also URL-encoded as a backstop.

@@ -83,4 +83,4 @@ export {
 export { ServerErrorCode, type ServerErrorCodeValue } from "./constants.js";
 
 // Replay scope (Phase 2 skeletons — bodies implemented in Phase 4+)
-export { traceScope, currentSessionId, currentScope, type TraceScopeOptions } from "./replay/scope.js";
+export { replayScope, currentSessionId, currentScope, type ReplayScopeOptions } from "./replay/scope.js";

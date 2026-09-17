@@ -30,7 +30,7 @@ import {
   ReplaySessionNotFoundError,
   FlowExecutionError,
 } from "../src/errors.js";
-import { traceScope, currentSessionId } from "../src/index.js";
+import { replayScope, currentSessionId } from "../src/index.js";
 import {
   HEADER_REPLAY,
   HEADER_SESSION_ID,
@@ -167,7 +167,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
     let scopeSid: string | null = null;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       await noukai.flow("a/b/c").execute({ message: "hi" });
     });
@@ -181,7 +181,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const { calls } = recordCalls();
     const noukai = new Noukai({ apiKey: "nk_x" });
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       await noukai.flow("a/b/c").execute({ message: "1" });
       await noukai.flow("a/b/c").execute({ message: "2" });
       await noukai.flow("a/b/d").execute({ message: "3" });
@@ -201,7 +201,7 @@ describe("Capture mode (scenarios 1–8)", () => {
       await noukai.flow("a/b/c").execute({ message: "hi" });
     };
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       sid = currentSessionId();
       await deeper();
     });
@@ -226,7 +226,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
     let scopeSid: string | null = null;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       for await (const _evt of noukai.flow("a/b/c").events({ message: "hi" })) {
         // consume all events
@@ -259,7 +259,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
     let scopeSid: string | null = null;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       await noukai.flow("a/b/c").execute({ message: "hi" });
       for await (const _evt of noukai.flow("a/b/c").events({ message: "hi2" })) {
@@ -285,7 +285,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
     let scopeSid: string | null = null;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       await noukai.flow("a/b/c").execute({ message: "hi", sessionId: "explicit-sid" });
     });
@@ -313,7 +313,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x", onLog: (e) => logEvents.push(e) });
 
     let scopeSid: string | null = null;
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       await noukai.flow("a/b/c").execute({ message: "hi" });
     }, { transport: noukai._transport });
@@ -338,7 +338,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x", onLog: (e) => logEvents.push(e) });
 
     await expect(
-      traceScope(async () => {
+      replayScope(async () => {
         throw new Error("deliberate body error");
       }, { transport: noukai._transport }),
     ).rejects.toThrow("deliberate body error");
@@ -356,7 +356,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     let scopeSid: string | null = null;
 
     // Should not throw even though _emitLog is called internally.
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       await noukai.flow("a/b/c").execute({ message: "hi" });
     }, { transport: noukai._transport });
@@ -374,7 +374,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     let scopeSid: string | null = null;
     let resultSid: string | undefined;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       const result = await noukai.flow("a/b/c").execute({ message: "hi" });
       resultSid = result.sessionId;
@@ -400,7 +400,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
     let resultSid: string | undefined;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       const result = await noukai.flow("a/b/c").execute({
         message: "hi",
         sessionId: "explicit-override",
@@ -420,7 +420,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const logEvents: any[] = [];
     const noukai = new Noukai({ apiKey: "nk_x", onLog: (e) => logEvents.push(e) });
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       // just enter and exit
     }, { transport: noukai._transport });
 
@@ -437,7 +437,7 @@ describe("Capture mode (scenarios 1–8)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
     let sid: string | null = null;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       sid = currentSessionId();
     });
 
@@ -470,7 +470,7 @@ describe("Replay mode (scenarios 9–17)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         const result = await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
         // In replay mode result.result should be the recorded output.
         expect((result as { result: { answer: number } }).result).toEqual({ answer: 42 });
@@ -498,7 +498,7 @@ describe("Replay mode (scenarios 9–17)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         const r1 = await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
         const r2 = await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
         expect((r1 as { result: { n: number } }).result).toEqual({ n: 1 });
@@ -525,7 +525,7 @@ describe("Replay mode (scenarios 9–17)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         const a1 = await noukai.flow("org/proj/A").execute({ message: "hi" });
         const b1 = await noukai.flow("org/proj/B").execute({ message: "hi" });
         const a2 = await noukai.flow("org/proj/A").execute({ message: "hi" });
@@ -568,7 +568,7 @@ describe("Replay mode (scenarios 9–17)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         const stepOutputs: unknown[] = [];
         for await (const evt of noukai.flow("org/proj/grade-3").events({ message: "hi" })) {
           if (evt.type === "step_completed") {
@@ -622,7 +622,7 @@ describe("Replay mode (scenarios 9–17)", () => {
     };
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         const [r1, r2] = await Promise.all([consume("1"), consume("2")]);
         const flowValues = new Set([
           (r1[0] as { flow: string } | undefined)?.flow,
@@ -648,7 +648,7 @@ describe("Replay mode (scenarios 9–17)", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
         }, { replaySessionId: "11111111-1111-4111-8111-111111111111" }),
       ).rejects.toThrow(/boom/);
@@ -668,7 +668,7 @@ describe("Replay mode (scenarios 9–17)", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
           // Second call has no recorded execution → ReplayMissError.
           await noukai.flow("acme/spelling/grade-3").execute({ message: "hi2" });
@@ -693,7 +693,7 @@ describe("Replay mode (scenarios 9–17)", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           // Only consume 1 of 2 recorded executions — leftover on exit.
           await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
         }, { replaySessionId: "11111111-1111-4111-8111-111111111111" }),
@@ -724,7 +724,7 @@ describe("Replay mode (scenarios 9–17)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         const first = await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
         const explicit = await noukai.flow("acme/spelling/grade-3").execute({
           message: "hi",
@@ -751,7 +751,7 @@ describe("Production safety (scenarios 18–20)", () => {
     const noukai = new Noukai({ apiKey: "nk_x" });
     let scopeSid: string | null = null;
 
-    await traceScope(async () => {
+    await replayScope(async () => {
       scopeSid = currentSessionId();
       await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
     }, { replaySessionId: "11111111-1111-4111-8111-111111111111" });
@@ -781,7 +781,7 @@ describe("Production safety (scenarios 18–20)", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           // Scope prefetch throws before body runs.
           await Promise.resolve();
         }, { replaySessionId: "11111111-1111-4111-8111-111111111111" }),
@@ -810,7 +810,7 @@ describe("Production safety (scenarios 18–20)", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           // Scope prefetch throws before body runs.
           await Promise.resolve();
         }, { replaySessionId: "11111111-1111-4111-8111-111111111111" }),
@@ -836,7 +836,7 @@ describe("Production safety — extra error mappings", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           await Promise.resolve();
         }, { replaySessionId: "11111111-1111-4111-8111-111111111111" }),
       ).rejects.toBeInstanceOf(ReplaySessionNotFoundError);
@@ -855,7 +855,7 @@ describe("Production safety — extra error mappings", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           await Promise.resolve();
         }, { replaySessionId: "11111111-1111-4111-8111-111111111111" }),
       ).rejects.toBeInstanceOf(ReplayInvalidSessionError);
@@ -871,7 +871,7 @@ describe("Production safety — extra error mappings", () => {
 
     await withReplayEnabled(async () => {
       await expect(
-        traceScope(async () => {
+        replayScope(async () => {
           await Promise.resolve();
         }, { replaySessionId: "11111111-1111-4111-8111-111111111111" }),
       ).rejects.toBeInstanceOf(ReplayNoSnapshotsError);
@@ -902,7 +902,7 @@ describe("Edge cases (scenarios 21–22)", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         // Two parallel execute() calls with the same slug — undefined behavior.
         await Promise.all([
           noukai.flow("a/b/A").execute({ message: "1" }),
@@ -924,7 +924,7 @@ describe("Edge cases (scenarios 21–22)", () => {
     const { calls } = recordCalls();
     const noukai = new Noukai({ apiKey: "nk_x" });
 
-    // No traceScope wrapping.
+    // No replayScope wrapping.
     const result = await noukai.flow("acme/spelling/grade-3").execute({ message: "hi" });
 
     expect((result as { result: { ok: boolean } }).result).toEqual({ ok: true });
@@ -975,7 +975,7 @@ describe("SSE reconstruction", () => {
     const typesSeen: string[] = [];
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         for await (const evt of noukai.flow("org/proj/A").events({ message: "hi" })) {
           typesSeen.push(evt.type);
         }
@@ -1028,7 +1028,7 @@ describe("SSE reconstruction", () => {
     const typesSeen: string[] = [];
 
     await withReplayEnabled(async () => {
-      await traceScope(async () => {
+      await replayScope(async () => {
         for await (const evt of noukai.flow("org/proj/A").events({ message: "hi" })) {
           typesSeen.push(evt.type);
         }

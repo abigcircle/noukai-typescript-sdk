@@ -35,7 +35,7 @@ import {
   ReplayMissError,
   type StepCompleted,
   type StreamEvent,
-  traceScope,
+  replayScope,
 } from "../../src/index.js";
 import { noukaiTraceMiddleware } from "../../src/adapters/express.js";
 import {
@@ -78,7 +78,7 @@ describe.skipIf(!integrationReady)("replay capture (integration)", () => {
     "trace scope surfaces sessionId on ExecuteResult",
     async () => {
       let observedSessionId: string | null = null;
-      const result = await traceScope<ExecuteResult>(
+      const result = await replayScope<ExecuteResult>(
         async () => {
           observedSessionId = currentSessionId();
           const r = await helloFlow(client).execute({ message: "capture-mode integration" });
@@ -102,7 +102,7 @@ describe.skipIf(!integrationReady)("replay capture (integration)", () => {
       const collected: { sessionId: string | undefined; executionId: string | undefined }[] =
         [];
 
-      const sessionId = await traceScope<string>(
+      const sessionId = await replayScope<string>(
         async () => {
           for (const msg of ["first", "second"]) {
             const r = await helloFlow(client).execute({ message: msg });
@@ -202,7 +202,7 @@ describe.skipIf(!integrationReady)("replay express adapter (integration)", () =>
       // The middleware's `next` argument is invoked with a `wrappedNext`
       // callback (not a standard Express `next`). The middleware needs us to
       // invoke that callback when the downstream chain finishes, so it can
-      // resolve the Promise wrapping the traceScope body. See express.ts.
+      // resolve the Promise wrapping the replayScope body. See express.ts.
       middleware(
         req as unknown as Parameters<typeof middleware>[0],
         resAdapter,
@@ -298,7 +298,7 @@ describe.skipIf(!REPLAY_READY)("replay round-trip (integration)", () => {
   it(
     "captured session replays the same output without re-invoking the model",
     async () => {
-      const captured = await traceScope<{
+      const captured = await replayScope<{
         sessionId: string;
         executionId: string | undefined;
         result: unknown;
@@ -312,7 +312,7 @@ describe.skipIf(!REPLAY_READY)("replay round-trip (integration)", () => {
         { transport: client._transport },
       );
 
-      const replayed = await traceScope<ExecuteResult>(
+      const replayed = await replayScope<ExecuteResult>(
         async () => {
           const r = await helloFlow(client).execute({ message: "replay round-trip seed" });
           if (r.requiresToolCalls) throw new Error("unexpected pause");
@@ -331,7 +331,7 @@ describe.skipIf(!REPLAY_READY)("replay round-trip (integration)", () => {
   it(
     "extra execute() call beyond what was recorded raises ReplayError",
     async () => {
-      const captured = await traceScope<string>(
+      const captured = await replayScope<string>(
         async () => {
           await helloFlow(client).execute({ message: "first and only recorded call" });
           const sid = currentSessionId();
@@ -342,7 +342,7 @@ describe.skipIf(!REPLAY_READY)("replay round-trip (integration)", () => {
       );
 
       await expect(
-        traceScope(
+        replayScope(
           async () => {
             await helloFlow(client).execute({ message: "first replayed call" });
             await helloFlow(client).execute({ message: "second call — no recording" });
@@ -390,7 +390,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
     "mixed execute() + events() across two flows replays end-to-end",
     async () => {
       // --- Capture phase ---
-      const captured = await traceScope<{
+      const captured = await replayScope<{
         sessionId: string;
         hello1: ExecuteResult;
         twoStepEvents: StreamEvent[];
@@ -418,7 +418,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
       expect(capturedStepCount).toBe(2);
 
       // --- Replay phase ---
-      const replayed = await traceScope<{
+      const replayed = await replayScope<{
         hello1: ExecuteResult;
         twoStepEvents: StreamEvent[];
         hello2: ExecuteResult;
@@ -495,7 +495,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
   it(
     "events() under replay emits the canonical reconstructed sequence for a multi-block flow",
     async () => {
-      const sessionId = await traceScope<string>(
+      const sessionId = await replayScope<string>(
         async () => {
           await collectStream(twoStepFlow(client).events({ message: "reconstruction test" }));
           const sid = currentSessionId();
@@ -505,7 +505,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
         { transport: client._transport },
       );
 
-      const replayed = await traceScope<StreamEvent[]>(
+      const replayed = await replayScope<StreamEvent[]>(
         async () =>
           collectStream(twoStepFlow(client).events({ message: "reconstruction test" })),
         { replaySessionId: sessionId, transport: client._transport },
@@ -524,7 +524,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
     "scope close with unconsumed executions raises ReplayLeftoverError",
     async () => {
       // Capture 3 executions.
-      const sessionId = await traceScope<string>(
+      const sessionId = await replayScope<string>(
         async () => {
           await helloFlow(client).execute({ message: "call 1" });
           await helloFlow(client).execute({ message: "call 2" });
@@ -538,7 +538,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
 
       // Replay only 2 — third stays unconsumed; scope close raises.
       await expect(
-        traceScope(
+        replayScope(
           async () => {
             await helloFlow(client).execute({ message: "call 1" });
             await helloFlow(client).execute({ message: "call 2" });
@@ -554,7 +554,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
     "replaying against a different flow slug raises ReplayMissError",
     async () => {
       // Capture against hello_flow.
-      const sessionId = await traceScope<string>(
+      const sessionId = await replayScope<string>(
         async () => {
           await helloFlow(client).execute({ message: "recorded only against hello" });
           const sid = currentSessionId();
@@ -566,7 +566,7 @@ describe.skipIf(!REPLAY_READY || !twoStepReady)("replay complex scenarios (integ
 
       // Replay against two_step_flow — no recording for that slug in this session.
       await expect(
-        traceScope(
+        replayScope(
           async () => {
             await twoStepFlow(client).execute({ message: "wrong slug — no recording" });
           },
