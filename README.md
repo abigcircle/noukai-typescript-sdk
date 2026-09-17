@@ -122,7 +122,7 @@ const result = await noukai.flow("acme/spelling/grade-3").execute({
   blockOverrides: { "step-id": { temperature: 0.5 } },
   attachments: [{ url: "https://...", mimeType: "image/png" }],
   trace: false,                              // capture full I/O for trace
-  version: "draft",                          // or a published integer
+  version: "production",                     // default; or "draft" / a published integer
   timeout: 60_000,                           // override client default
   signal: controller.signal,                 // cancel this call only
 });
@@ -519,11 +519,14 @@ header in production cannot redirect a real request to a cassette.
 
 | `version`     | Behaviour                                                                 |
 | ------------- | ------------------------------------------------------------------------- |
-| `"draft"` *(default)* | Latest unpublished draft (what you see in the editor).            |
+| `"production"` *(default)* | The flow's published production version. Falls back to the live draft when the flow has no published version. |
+| `"draft"`     | The latest unpublished draft (what you see in the editor). Not supported by `steps()` / `events()`. |
 | `<integer>`   | A specific published version (e.g. `version: 3`).                         |
-| `"production"`| **Not yet supported** — throws at call site until the server contract lands. |
 
-Pin a version when calling from production code; use `"draft"` only in test and preview environments.
+`execute()` / `executeAsync()` accept all three. `steps()` / `events()` accept
+`"production"` or an integer only — the server does not support step-through on
+the draft. Use `"draft"` in test and preview environments; the default
+(`"production"`) is what you want from production code.
 
 ## Run traces
 

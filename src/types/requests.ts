@@ -44,12 +44,9 @@ export interface ExecuteRequest {
   toolCallMessages?: Record<string, unknown>[];
   accumulatedOutputs?: Record<string, unknown>;
   trace?: boolean;
-  /**
-   * Explicit version selector. Omit for draft (default). Pass an integer to pin
-   * to a specific published version. `"production"` will be supported in a
-   * future release once the server-side routing lands.
-   */
-  version?: "production" | number;
+  // Note: there is no `version` body field. The server routes versions by URL
+  // path (base = production, /v0 = draft, /vN = version N); see paths.ts and
+  // Flow._pathVersion. Design 20260917-SDK-version-production-routing.
 }
 
 /** POST /seq/{org}/{project}/{slug}/step body. */

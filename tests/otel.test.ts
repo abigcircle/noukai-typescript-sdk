@@ -125,7 +125,8 @@ describe("OTel span emission through execute()", () => {
     expect(span.attributes["noukai.org"]).toBe("acme");
     expect(span.attributes["noukai.project"]).toBe("proj");
     expect(span.attributes["noukai.flow.slug"]).toBe("grade");
-    expect(span.attributes["noukai.flow.version"]).toBe("draft");
+    // Default version is now "production" (design 20260917-SDK-version-production-routing).
+    expect(span.attributes["noukai.flow.version"]).toBe("production");
     expect(span.attributes["noukai.execution_id"]).toBe("exec-123");
     expect(span.attributes["noukai.flow.status"]).toBe("completed");
   });

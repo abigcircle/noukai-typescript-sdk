@@ -57,6 +57,9 @@ describe.skipIf(!integrationReady)("OpenTelemetry — parent span (integration)"
       (result as { executionId?: string }).executionId,
     );
     expect(spans[0].attributes["noukai.flow.status"]).toBe("completed");
+    // The live execute() should also surface the flow output.
+    expect((result as { result?: unknown }).result).toBeDefined();
+    expect((result as { result?: unknown }).result).not.toBeNull();
   }, 60_000);
 });
 

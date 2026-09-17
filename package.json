@@ -1,6 +1,6 @@
 {
   "name": "@noukai/sdk",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "TypeScript SDK for executing Noukai flows",
   "type": "module",
   "main": "./dist/index.js",
@@ -24,13 +24,25 @@
       "types": "./dist/adapters/relay.d.ts"
     }
   },
-  "engines": { "node": ">=18.0.0" },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "sideEffects": false,
-  "files": ["dist", "README.md", "LICENSE", "CHANGELOG.md"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "license": "MIT",
   "homepage": "https://noukai.dev",
-  "repository": { "type": "git", "url": "git+https://github.com/abigcircle/noukai-typescript-sdk.git" },
-  "bugs": { "url": "https://github.com/abigcircle/noukai-typescript-sdk/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abigcircle/noukai-typescript-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/abigcircle/noukai-typescript-sdk/issues"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -52,9 +64,15 @@
     "next": "^14.0.0 || ^15.0.0"
   },
   "peerDependenciesMeta": {
-    "@opentelemetry/api": { "optional": true },
-    "express": { "optional": true },
-    "next": { "optional": true }
+    "@opentelemetry/api": {
+      "optional": true
+    },
+    "express": {
+      "optional": true
+    },
+    "next": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",
